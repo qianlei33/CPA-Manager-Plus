@@ -164,6 +164,22 @@ export function IconRefreshCw({ size = 20, ...props }: IconProps) {
   );
 }
 
+/**
+ * Renders an access-token refresh icon for operations that rotate RT/AT credentials.
+ */
+export function IconTokenRefresh({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <path d="M7.5 14.5a4.5 4.5 0 1 1 3.9-6.75" />
+      <path d="M11 5.5h3v3" />
+      <path d="m14 5.5-3.15 3.15" />
+      <path d="M12.5 17.5h8" />
+      <path d="M18 14.5l3 3-3 3" />
+      <circle cx="7.5" cy="14.5" r="2" />
+    </svg>
+  );
+}
+
 export function IconArrowDownToLine({ size = 20, ...props }: IconProps) {
   return (
     <svg {...baseSvgProps} width={size} height={size} {...props}>

@@ -6,6 +6,7 @@ import (
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/app"
 	apikeyaliascontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/apikeyalias"
+	authrefreshcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/authrefresh"
 	codexinspectioncontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/codexinspection"
 	dashboardcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/dashboard"
 	healthcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/health"
@@ -29,6 +30,7 @@ func New(appCtx *app.Context) http.Handler {
 	usageHandler := &usagecontroller.Handler{App: appCtx}
 	modelPriceHandler := &modelpricecontroller.Handler{App: appCtx}
 	apiKeyAliasHandler := &apikeyaliascontroller.Handler{App: appCtx}
+	authRefreshHandler := &authrefreshcontroller.Handler{App: appCtx}
 	codexInspectionHandler := &codexinspectioncontroller.Handler{App: appCtx}
 	dashboardHandler := &dashboardcontroller.Handler{App: appCtx}
 	monitoringHandler := &monitoringcontroller.Handler{App: appCtx}
@@ -42,7 +44,7 @@ func New(appCtx *app.Context) http.Handler {
 	mux.HandleFunc("/usage-service/config", middleware.WithCORS(appCtx.Config, managerConfigHandler.Handle))
 	mux.HandleFunc("/setup", middleware.WithCORS(appCtx.Config, setupHandler.Setup))
 	mux.HandleFunc("/management.html", panelHandler.ManagementHTML)
-	mux.HandleFunc("/", rootHandler(appCtx, usageHandler, modelPriceHandler, apiKeyAliasHandler, codexInspectionHandler, dashboardHandler, monitoringHandler, proxyHandler))
+	mux.HandleFunc("/", rootHandler(appCtx, usageHandler, modelPriceHandler, apiKeyAliasHandler, authRefreshHandler, codexInspectionHandler, dashboardHandler, monitoringHandler, proxyHandler))
 
 	return middleware.Recovery(middleware.RequestLogger(mux))
 }
@@ -52,6 +54,7 @@ func rootHandler(
 	usageHandler *usagecontroller.Handler,
 	modelPriceHandler *modelpricecontroller.Handler,
 	apiKeyAliasHandler *apikeyaliascontroller.Handler,
+	authRefreshHandler *authrefreshcontroller.Handler,
 	codexInspectionHandler *codexinspectioncontroller.Handler,
 	dashboardHandler *dashboardcontroller.Handler,
 	monitoringHandler *monitoringcontroller.Handler,
@@ -69,6 +72,10 @@ func rootHandler(
 		}
 		if strings.HasPrefix(r.URL.Path, "/v0/management/api-key-aliases") {
 			middleware.WithCORS(appCtx.Config, apiKeyAliasHandler.Handle)(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/v0/management/auth-files/refresh-token") {
+			middleware.WithCORS(appCtx.Config, authRefreshHandler.Handle)(w, r)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/v0/management/codex-inspection") {

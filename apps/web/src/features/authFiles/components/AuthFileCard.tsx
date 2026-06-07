@@ -8,6 +8,7 @@ import {
   IconInfo,
   IconModelCluster,
   IconSettings,
+  IconTokenRefresh,
   IconTrash2,
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
@@ -47,6 +48,7 @@ export type AuthFileCardProps = {
   disableControls: boolean;
   deleting: string | null;
   statusUpdating: Record<string, boolean>;
+  refreshing: Record<string, boolean>;
   statusBarCache: Map<string, AuthFileStatusBarData>;
   codexStatusBadges?: AuthFileCodexStatusBadge[];
   onShowModels: (file: AuthFileItem) => void;
@@ -55,6 +57,7 @@ export type AuthFileCardProps = {
   onDelete: (name: string) => void;
   onToggleStatus: (file: AuthFileItem, enabled: boolean) => void;
   onToggleSelect: (name: string) => void;
+  onRefresh: (file: AuthFileItem) => void;
 };
 
 const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
@@ -79,6 +82,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
     disableControls,
     deleting,
     statusUpdating,
+    refreshing,
     statusBarCache,
     codexStatusBadges = [],
     onShowModels,
@@ -87,6 +91,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
     onDelete,
     onToggleStatus,
     onToggleSelect,
+    onRefresh,
   } = props;
 
   const recentBuckets = normalizeRecentRequestBuckets(file.recent_requests ?? file.recentRequests);
@@ -300,6 +305,22 @@ export function AuthFileCard(props: AuthFileCardProps) {
                   )}
                   {!isRuntimeOnly && (
                     <>
+                      {providerKey === 'codex' && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onRefresh(file)}
+                          className={styles.iconButton}
+                          title={t('auth_files.refresh_button', { defaultValue: '强制刷新 Token' })}
+                          disabled={disableControls || refreshing[file.name] === true}
+                        >
+                          {refreshing[file.name] ? (
+                            <LoadingSpinner size={14} />
+                          ) : (
+                            <IconTokenRefresh className={styles.actionIcon} size={16} />
+                          )}
+                        </Button>
+                      )}
                       <Button
                         variant="secondary"
                         size="sm"

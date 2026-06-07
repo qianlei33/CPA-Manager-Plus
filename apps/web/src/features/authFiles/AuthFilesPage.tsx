@@ -19,7 +19,8 @@ import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer'
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { IconFilterAll, IconSearch } from '@/components/ui/icons';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { IconFilterAll, IconSearch, IconTokenRefresh } from '@/components/ui/icons';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -146,6 +147,8 @@ export function AuthFilesPage() {
     deletingAll,
     statusUpdating,
     batchStatusUpdating,
+    refreshing,
+    batchRefreshing,
     fileInputRef,
     loadFiles,
     handleUploadClick,
@@ -162,6 +165,8 @@ export function AuthFilesPage() {
     batchDownload,
     batchSetStatus,
     batchDelete,
+    refreshCodexToken,
+    batchRefreshCodexToken,
   } = useAuthFilesData();
 
   const statusBarCache = useAuthFilesStatusBarCache(files);
@@ -597,6 +602,13 @@ export function AuthFilesPage() {
     batchStatusUpdating ||
     selectedHasStatusUpdating;
 
+  const selectedCodexNames = useMemo(() => {
+    const nameSet = new Set(selectedNames);
+    return files
+      .filter((file) => nameSet.has(file.name) && normalizeProviderKey(String(file.type ?? file.provider ?? '')) === 'codex')
+      .map((file) => file.name);
+  }, [selectedNames, files]);
+
   const copyTextWithNotification = useCallback(
     async (text: string) => {
       const copied = await copyToClipboard(text);
@@ -1019,6 +1031,7 @@ export function AuthFilesPage() {
                       disableControls={disableControls}
                       deleting={deleting}
                       statusUpdating={statusUpdating}
+                      refreshing={refreshing}
                       statusBarCache={statusBarCache}
                       codexStatusBadges={
                         codexStatusByAuthFileKey.get(authFileKey)?.badges ?? []
@@ -1029,6 +1042,7 @@ export function AuthFilesPage() {
                       onDelete={handleDelete}
                       onToggleStatus={handleStatusToggle}
                       onToggleSelect={toggleSelect}
+                      onRefresh={(f) => void refreshCodexToken(apiBase, managementKey, f.name)}
                     />
                   );
                 })}
@@ -1170,6 +1184,24 @@ export function AuthFilesPage() {
                   >
                     {t('auth_files.batch_download')}
                   </Button>
+                  {selectedCodexNames.length > 0 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => batchRefreshCodexToken(apiBase, managementKey, selectedCodexNames)}
+                      disabled={disableControls || batchRefreshing}
+                    >
+                      {batchRefreshing ? (
+                        <LoadingSpinner size={14} />
+                      ) : (
+                        <IconTokenRefresh className={styles.actionIcon} size={15} />
+                      )}
+                      {t('auth_files.batch_refresh_with_count', {
+                        count: selectedCodexNames.length,
+                        defaultValue: `刷新 Codex Token (${selectedCodexNames.length})`,
+                      })}
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     onClick={() => batchSetStatus(selectedNames, true)}

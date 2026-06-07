@@ -230,6 +230,17 @@ export interface CodexInspectionActionsResponse {
   detail: CodexInspectionRunDetail;
 }
 
+export interface CodexRefreshResult {
+  name: string;
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface CodexRefreshResponse {
+  results: CodexRefreshResult[];
+}
+
 export interface ModelPricesResponse {
   prices: Record<string, ModelPrice>;
 }
@@ -1185,6 +1196,24 @@ export const usageServiceApi = {
         payload,
         {
           timeout: USAGE_SERVICE_TRANSFER_TIMEOUT_MS,
+          headers: authHeaders(managementKey),
+        }
+      );
+      return response.data;
+    });
+  },
+
+  refreshCodexTokens: async (
+    base: string,
+    managementKey: string | undefined,
+    names: string[]
+  ): Promise<CodexRefreshResponse> => {
+    return withUsageServiceError(async () => {
+      const response = await axios.post<CodexRefreshResponse>(
+        buildUrl(base, '/v0/management/auth-files/refresh-token'),
+        { names },
+        {
+          timeout: 30 * 1000,
           headers: authHeaders(managementKey),
         }
       );

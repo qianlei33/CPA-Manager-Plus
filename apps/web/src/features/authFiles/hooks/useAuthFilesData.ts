@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { authFilesApi } from '@/services/api';
+import { authFilesApi, usageServiceApi } from '@/services/api';
 import { apiClient } from '@/services/api/client';
 import { useNotificationStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
@@ -45,6 +45,8 @@ export type UseAuthFilesDataResult = {
   deletingAll: boolean;
   statusUpdating: Record<string, boolean>;
   batchStatusUpdating: boolean;
+  refreshing: Record<string, boolean>;
+  batchRefreshing: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   loadFiles: (options?: { throwOnError?: boolean }) => Promise<void>;
   handleUploadClick: () => void;
@@ -65,6 +67,8 @@ export type UseAuthFilesDataResult = {
   batchDownload: (names: string[]) => Promise<void>;
   batchSetStatus: (names: string[], enabled: boolean) => Promise<void>;
   batchDelete: (names: string[]) => void;
+  refreshCodexToken: (base: string, key: string | undefined, name: string) => void;
+  batchRefreshCodexToken: (base: string, key: string | undefined, names: string[]) => void;
 };
 
 type PastedAuthJsonPayload = {
@@ -102,6 +106,8 @@ export function useAuthFilesData(): UseAuthFilesDataResult {
   const [deletingAll, setDeletingAll] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
   const [batchStatusUpdating, setBatchStatusUpdating] = useState(false);
+  const [refreshing, setRefreshing] = useState<Record<string, boolean>>({});
+  const [batchRefreshing, setBatchRefreshing] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -732,6 +738,109 @@ export function useAuthFilesData(): UseAuthFilesDataResult {
     [applyDeletedFiles, showConfirmation, showNotification, t]
   );
 
+  const refreshCodexToken = useCallback(
+    (base: string, key: string | undefined, name: string) => {
+      if (!name || refreshing[name]) return;
+      showConfirmation({
+        title: t('auth_files.refresh_confirm_title'),
+        message: t('auth_files.refresh_confirm_message', { count: 1 }),
+        variant: 'danger',
+        confirmText: t('auth_files.refresh_confirm_action'),
+        onConfirm: async () => {
+          setRefreshing((prev) => ({ ...prev, [name]: true }));
+          try {
+            const response = await usageServiceApi.refreshCodexTokens(base, key, [name]);
+            const result = response.results[0];
+            if (result?.success) {
+              showNotification(
+                t('auth_files.refresh_success', { name: result.name }),
+                'success'
+              );
+            } else {
+              showNotification(
+                `${t('auth_files.refresh_failed', { name: result?.name || name })}: ${result?.error || t('common.unknown_error')}`,
+                'error'
+              );
+            }
+          } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : '';
+            showNotification(`${t('auth_files.refresh_failed', { name })}: ${errorMessage}`, 'error');
+          } finally {
+            setRefreshing((prev) => {
+              const next = { ...prev };
+              delete next[name];
+              return next;
+            });
+          }
+        },
+      });
+    },
+    [refreshing, showConfirmation, showNotification, t]
+  );
+
+  const batchRefreshCodexToken = useCallback(
+    (base: string, key: string | undefined, names: string[]) => {
+      if (batchRefreshing) return;
+      const uniqueNames = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)));
+      if (uniqueNames.length === 0) return;
+
+      showConfirmation({
+        title: t('auth_files.refresh_confirm_title'),
+        message: t('auth_files.refresh_confirm_message', { count: uniqueNames.length }),
+        variant: 'danger',
+        confirmText: t('auth_files.refresh_confirm_action'),
+        onConfirm: async () => {
+          setBatchRefreshing(true);
+          setRefreshing((prev) => {
+            const next = { ...prev };
+            uniqueNames.forEach((name) => {
+              next[name] = true;
+            });
+            return next;
+          });
+
+          try {
+            const response = await usageServiceApi.refreshCodexTokens(base, key, uniqueNames);
+            let successCount = 0;
+            let failCount = 0;
+            response.results.forEach((result) => {
+              if (result.success) {
+                successCount++;
+              } else {
+                failCount++;
+              }
+            });
+
+            if (failCount === 0) {
+              showNotification(
+                t('auth_files.batch_refresh_success', { count: successCount }),
+                'success'
+              );
+            } else {
+              showNotification(
+                t('auth_files.batch_refresh_partial', { success: successCount, failed: failCount }),
+                'warning'
+              );
+            }
+          } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : '';
+            showNotification(`${t('auth_files.batch_refresh_failed')}: ${errorMessage}`, 'error');
+          } finally {
+            setBatchRefreshing(false);
+            setRefreshing((prev) => {
+              const next = { ...prev };
+              uniqueNames.forEach((name) => {
+                delete next[name];
+              });
+              return next;
+            });
+          }
+        },
+      });
+    },
+    [batchRefreshing, showConfirmation, showNotification, t]
+  );
+
   return {
     files,
     selectedFiles,
@@ -744,6 +853,8 @@ export function useAuthFilesData(): UseAuthFilesDataResult {
     deletingAll,
     statusUpdating,
     batchStatusUpdating,
+    refreshing,
+    batchRefreshing,
     fileInputRef,
     loadFiles,
     handleUploadClick,
@@ -760,5 +871,7 @@ export function useAuthFilesData(): UseAuthFilesDataResult {
     batchDownload,
     batchSetStatus,
     batchDelete,
+    refreshCodexToken,
+    batchRefreshCodexToken,
   };
 }

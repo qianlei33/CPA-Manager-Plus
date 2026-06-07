@@ -51,6 +51,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src')
     }
   },
+  server: {
+    proxy: {
+      '/health': 'http://127.0.0.1:18317',
+      '/setup': 'http://127.0.0.1:18317',
+      '/status': 'http://127.0.0.1:18317',
+      '/usage-service': 'http://127.0.0.1:18317',
+      '/v0': 'http://127.0.0.1:18317'
+    }
+  },
   css: {
     modules: {
       localsConvention: 'camelCase',
