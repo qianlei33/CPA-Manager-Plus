@@ -387,6 +387,16 @@ export function MainLayout() {
     [setLanguage]
   );
 
+  const handleNodeSelect = useCallback(
+    (nodeId: string) => {
+      setCurrentNodeId(nodeId);
+      setNodeMenuOpen(false);
+      clearCache();
+      void triggerHeaderRefresh();
+    },
+    [clearCache, setCurrentNodeId]
+  );
+
   useEffect(() => {
     fetchConfig().catch(() => {
       // ignore initial failure; login flow会提示
@@ -608,10 +618,7 @@ export function MainLayout() {
                         key={node.id}
                         type="button"
                         className={`language-menu-option ${node.id === currentNodeId ? 'active' : ''}`}
-                        onClick={() => {
-                          setCurrentNodeId(node.id);
-                          setNodeMenuOpen(false);
-                        }}
+                        onClick={() => handleNodeSelect(node.id)}
                         role="menuitemradio"
                         aria-checked={node.id === currentNodeId}
                       >

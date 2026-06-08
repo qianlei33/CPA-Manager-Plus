@@ -34,6 +34,8 @@ const emptyDraft: CPANodeInput = {
   requestMonitoringEnabled: true,
 };
 
+const COLLECTOR_STATUS_RELOAD_DELAY_MS = 800;
+
 const stepLabels: Record<WizardStep, string> = {
   connection: 'CPA 连接',
   secret: 'CPA 密钥',
@@ -60,6 +62,10 @@ function collectorTone(value: string | undefined): 'ok' | 'warn' | 'error' | 'id
   if (value === 'starting') return 'warn';
   if (value === 'error') return 'error';
   return 'idle';
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
 export function CPANodesPage() {
@@ -202,8 +208,10 @@ export function CPANodesPage() {
         ? await cpaNodeApi.update(serviceBase, managementKey, editing.id, payload)
         : await cpaNodeApi.create(serviceBase, managementKey, payload);
       await fetchNodes(serviceBase, managementKey);
-      await loadCollectorStatuses();
       if (!editing) setCurrentNodeId(saved.id);
+      await loadCollectorStatuses();
+      await wait(COLLECTOR_STATUS_RELOAD_DELAY_MS);
+      await loadCollectorStatuses();
       resetForm();
       showNotification('CPA 节点已保存', 'success');
     } catch (error) {
