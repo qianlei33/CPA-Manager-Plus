@@ -47,3 +47,8 @@ apps/manager-server/cmd/cpa-manager-plus/data/
 /run/*.log
 package-lock.json
 apps/manager-server/cmd/cpa-manager-plus/config.json
+
+
+apps/manager-server/config.json
+
+apps/manager-server/data/

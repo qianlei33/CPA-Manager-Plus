@@ -11,8 +11,11 @@ services:
       HTTP_ADDR: "0.0.0.0:18317"
       USAGE_DB_PATH: "/data/usage.sqlite"
       CPA_MANAGER_DATA_KEY_PATH: "/data/data.key"
-      # Optional: set CPA_MANAGER_ADMIN_KEY or CPA_MANAGER_ADMIN_KEY_FILE to provide
-      # a stable admin key. If omitted, the first startup log prints a generated key once.
+      # /data must be persisted. It stores SQLite data, CPA nodes, encrypted
+      # management keys, usage events, Plus settings, and data.key.
+      # Optional: set CPA_MANAGER_ADMIN_KEY or CPA_MANAGER_ADMIN_KEY_FILE to
+      # preconfigure the Plus login token/admin credential for unattended installs.
+      # If omitted, the first browser visit asks you to set the Plus login token.
       # Optional: set CPA_MANAGER_DATA_KEY or CPA_MANAGER_DATA_KEY_FILE only when you
       # manage this encryption key outside the /data volume.
       USAGE_COLLECTOR_MODE: "auto"
