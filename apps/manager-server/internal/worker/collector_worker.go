@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/app"
 	collectorpkg "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/collector"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/config"
 	collectorservice "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/collector"
@@ -19,8 +20,14 @@ type CollectorWorker struct {
 	collectorService *collectorservice.Service
 	cpaNodeService   *cpanodeservice.Service
 	mu               sync.Mutex
-	nodeManagers     []*collectorpkg.Manager
+	nodeManagers     []nodeCollectorManager
 	runtimeCtx       context.Context
+}
+
+type nodeCollectorManager struct {
+	nodeID   string
+	nodeName string
+	manager  *collectorpkg.Manager
 }
 
 func NewCollectorWorker(cfg config.Config, store *store.Store, collectorService *collectorservice.Service, cpaNodeService ...*cpanodeservice.Service) *CollectorWorker {
@@ -93,7 +100,7 @@ func (w *CollectorWorker) ReloadNodes(ctx context.Context) error {
 	}
 	w.mu.Lock()
 	for _, manager := range w.nodeManagers {
-		manager.Stop()
+		manager.manager.Stop()
 	}
 	w.nodeManagers = nil
 	w.mu.Unlock()
@@ -118,7 +125,7 @@ func (w *CollectorWorker) startNodeCollectors(ctx context.Context) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, manager := range w.nodeManagers {
-		manager.Stop()
+		manager.manager.Stop()
 	}
 	w.nodeManagers = nil
 	for _, node := range nodes {
@@ -139,15 +146,34 @@ func (w *CollectorWorker) startNodeCollectors(ctx context.Context) bool {
 			TLSSkipVerify:  node.TLSSkipVerify,
 		}
 		manager.Start(ctx, runtime)
-		w.nodeManagers = append(w.nodeManagers, manager)
+		w.nodeManagers = append(w.nodeManagers, nodeCollectorManager{
+			nodeID:   node.ID,
+			nodeName: node.Name,
+			manager:  manager,
+		})
 	}
 	return true
+}
+
+// NodeStatuses returns current collector status for each active CPA node collector.
+func (w *CollectorWorker) NodeStatuses() []app.NodeCollectorStatus {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	statuses := make([]app.NodeCollectorStatus, 0, len(w.nodeManagers))
+	for _, entry := range w.nodeManagers {
+		statuses = append(statuses, app.NodeCollectorStatus{
+			NodeID:   entry.nodeID,
+			NodeName: entry.nodeName,
+			Status:   entry.manager.Status(),
+		})
+	}
+	return statuses
 }
 
 func (w *CollectorWorker) Stop(ctx context.Context) {
 	w.mu.Lock()
 	for _, manager := range w.nodeManagers {
-		manager.Stop()
+		manager.manager.Stop()
 	}
 	w.nodeManagers = nil
 	w.mu.Unlock()

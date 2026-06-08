@@ -1,8 +1,14 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
-import { cpaNodeApi, type CPANode, type CPANodeInput } from '@/services/api/usageService';
+import {
+  cpaNodeApi,
+  usageServiceApi,
+  type CPANode,
+  type CPANodeInput,
+  type UsageServiceNodeCollectorStatus,
+} from '@/services/api/usageService';
 import { useAuthStore, useCPANodeStore, useNotificationStore, useUsageServiceStore } from '@/stores';
 import styles from './CPANodesPage.module.scss';
 
@@ -36,6 +42,26 @@ const stepLabels: Record<WizardStep, string> = {
   review: '确认提交',
 };
 
+const stepDescriptions: Record<WizardStep, string> = {
+  connection: '定义节点身份、入口地址和启用状态。',
+  secret: '配置 CPA 管理密钥，编辑时留空表示保留原密钥。',
+  monitoring: '决定是否让 Manager Plus 从该节点采集请求用量。',
+  polling: '设置采集轮询节奏，避免对节点造成额外压力。',
+  review: '确认节点配置后保存并启动采集。',
+};
+
+function formatCollectorTime(value: number | undefined): string {
+  if (!value) return '--';
+  return new Date(value).toLocaleTimeString();
+}
+
+function collectorTone(value: string | undefined): 'ok' | 'warn' | 'error' | 'idle' {
+  if (value === 'running') return 'ok';
+  if (value === 'starting') return 'warn';
+  if (value === 'error') return 'error';
+  return 'idle';
+}
+
 export function CPANodesPage() {
   const managementKey = useAuthStore((state) => state.managementKey);
   const { showNotification } = useNotificationStore();
@@ -52,11 +78,27 @@ export function CPANodesPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [collectorStatusMap, setCollectorStatusMap] = useState<Record<string, UsageServiceNodeCollectorStatus>>({});
+
+  const loadCollectorStatuses = useCallback(async () => {
+    if (!serviceBase) return;
+    try {
+      const status = await usageServiceApi.getStatus(serviceBase, managementKey);
+      const nextMap: Record<string, UsageServiceNodeCollectorStatus> = {};
+      status.nodeCollectors?.forEach((item) => {
+        if (item.nodeId) nextMap[item.nodeId] = item;
+      });
+      setCollectorStatusMap(nextMap);
+    } catch {
+      setCollectorStatusMap({});
+    }
+  }, [managementKey, serviceBase]);
 
   useEffect(() => {
     if (!serviceBase) return;
     void fetchNodes(serviceBase, managementKey);
-  }, [fetchNodes, managementKey, serviceBase]);
+    void loadCollectorStatuses();
+  }, [fetchNodes, loadCollectorStatuses, managementKey, serviceBase]);
 
   const stepIndex = steps.indexOf(step);
   const isFirstStep = stepIndex <= 0;
@@ -160,6 +202,7 @@ export function CPANodesPage() {
         ? await cpaNodeApi.update(serviceBase, managementKey, editing.id, payload)
         : await cpaNodeApi.create(serviceBase, managementKey, payload);
       await fetchNodes(serviceBase, managementKey);
+      await loadCollectorStatuses();
       if (!editing) setCurrentNodeId(saved.id);
       resetForm();
       showNotification('CPA 节点已保存', 'success');
@@ -174,6 +217,7 @@ export function CPANodesPage() {
     if (!serviceBase || !window.confirm(`确认删除节点 ${node.name}？`)) return;
     await cpaNodeApi.remove(serviceBase, managementKey, node.id);
     await fetchNodes(serviceBase, managementKey);
+    await loadCollectorStatuses();
   };
 
   const validateNode = async (node: CPANode) => {
@@ -189,8 +233,12 @@ export function CPANodesPage() {
   return (
     <div className={styles.page}>
       <section className={styles.header}>
-        <h1>CPA 节点管理</h1>
-        <p>这是 CPA Manager Plus 自身配置。左侧菜单用于管理当前选中的 CPA 节点内容。</p>
+        <div>
+          <span className={styles.eyebrow}>CPA Manager Plus</span>
+          <h1>CPA 节点管理</h1>
+          <p>管理上游 CPA 节点、连接密钥与请求采集策略。左侧页面始终操作当前选中节点。</p>
+        </div>
+        <Button type="button" onClick={startCreate}>新增节点</Button>
       </section>
 
       <section className={styles.toolbar} aria-label="节点查询条件">
@@ -219,36 +267,56 @@ export function CPANodesPage() {
             </select>
           </div>
         </div>
-        <Button type="button" onClick={startCreate}>新增节点</Button>
       </section>
 
       <section className={styles.cards}>
-        {filteredNodes.map((node) => (
-          <div
-            key={node.id}
-            className={`${styles.nodeCard} ${node.id === currentNodeId ? styles.nodeCardActive : ''}`}
-          >
-            <div className={styles.nodeTop}>
-              <div className={styles.nodeTitle}>
-                <span className={styles.nodeName}>{node.name}</span>
-                <span className={styles.nodeUrl}>{node.baseUrl}</span>
+        {filteredNodes.map((node) => {
+          const collectorStatus = collectorStatusMap[node.id]?.status;
+          const tone = collectorTone(collectorStatus?.collector);
+          return (
+            <div
+              key={node.id}
+              className={`${styles.nodeCard} ${node.id === currentNodeId ? styles.nodeCardActive : ''}`}
+            >
+              <div className={styles.nodeTop}>
+                <div className={styles.nodeTitle}>
+                  <span className={styles.nodeName}>{node.name}</span>
+                  <span className={styles.nodeUrl}>{node.baseUrl}</span>
+                </div>
+                <div className={styles.badges}>
+                  <span className={`${styles.badge} ${node.enabled ? styles.badgeEnabled : ''}`}>
+                    {node.enabled ? '已启用' : '已禁用'}
+                  </span>
+                  <span className={`${styles.badge} ${node.collectorEnabled ? styles.badgeEnabled : ''}`}>
+                    监控{node.collectorEnabled ? '开启' : '关闭'}
+                  </span>
+                </div>
               </div>
-              <span className={`${styles.badge} ${node.enabled ? styles.badgeEnabled : ''}`}>
-                {node.enabled ? '已启用' : '已禁用'}
-              </span>
-              <span className={`${styles.badge} ${node.collectorEnabled ? styles.badgeEnabled : ''}`}>
-                监控{node.collectorEnabled ? '已启用' : '已禁用'}
-              </span>
+
+              {node.description ? <span className={styles.nodeDescription}>{node.description}</span> : null}
+
+              <div className={styles.collectorStrip}>
+                <span className={`${styles.collectorPill} ${styles[`collector_${tone}`]}`}>
+                  <i aria-hidden="true" />{collectorStatus?.collector || '未运行'}
+                </span>
+                <span>传输：{collectorStatus?.transport || '--'}</span>
+                <span>队列：{collectorStatus?.queue || node.queue || 'usage'}</span>
+                <span>写入：{formatCollectorTime(collectorStatus?.lastInsertedAt)}</span>
+              </div>
+
+              {collectorStatus?.lastError ? (
+                <div className={styles.collectorError}>{collectorStatus.lastError}</div>
+              ) : null}
+
+              <div className={styles.actions}>
+                <Button size="sm" onClick={() => setCurrentNodeId(node.id)}>设为当前</Button>
+                <Button size="sm" variant="secondary" onClick={() => startEdit(node)}>编辑</Button>
+                <Button size="sm" variant="secondary" onClick={() => void validateNode(node)}>测试连接</Button>
+                <Button size="sm" variant="danger" onClick={() => void removeNode(node)}>删除</Button>
+              </div>
             </div>
-            {node.description ? <span className={styles.nodeDescription}>{node.description}</span> : null}
-            <div className={styles.actions}>
-              <Button size="sm" onClick={() => setCurrentNodeId(node.id)}>设为当前</Button>
-              <Button size="sm" variant="secondary" onClick={() => startEdit(node)}>编辑</Button>
-              <Button size="sm" variant="secondary" onClick={() => void validateNode(node)}>测试连接</Button>
-              <Button size="sm" variant="danger" onClick={() => void removeNode(node)}>删除</Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
       {wizardOpen && (
@@ -256,6 +324,7 @@ export function CPANodesPage() {
           <form onSubmit={submit} className={styles.wizard} role="dialog" aria-modal="true" aria-label={title}>
             <div className={styles.drawerHeader}>
               <div>
+                <span className={styles.drawerEyebrow}>{editing ? 'EDIT NODE' : 'NEW NODE'}</span>
                 <h2>{title}</h2>
                 <p>按步骤完成节点连接、密钥和采集策略配置。</p>
               </div>
@@ -272,15 +341,20 @@ export function CPANodesPage() {
                   <span className={styles.stepIndex}>{index + 1}</span>
                   <span className={styles.stepCopy}>
                     <strong>{stepLabels[item]}</strong>
+                    <small>{index + 1 === stepIndex + 1 ? '当前步骤' : '配置项'}</small>
                   </span>
                 </button>
               ))}
             </div>
 
-            <div className={styles.stepProgress}>步骤 {stepIndex + 1} / {steps.length}</div>
+            <div className={styles.stepProgress}>
+              <span>步骤 {stepIndex + 1} / {steps.length}</span>
+              <strong>{stepLabels[step]}</strong>
+              <em>{stepDescriptions[step]}</em>
+            </div>
 
             <div className={styles.drawerGrid}>
-              <div>
+              <div className={styles.stepPanel}>
                 {step === 'connection' && (
                   <div className={styles.fields}>
                     <Input label="节点名称" value={draft.name} placeholder="例如：生产 CPA" onChange={(event) => updateDraft('name', event.target.value)} />

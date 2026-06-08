@@ -149,7 +149,7 @@ func TestCollectorWorkerReloadStartsNewNodeCollector(t *testing.T) {
 	if len(collectorWorker.nodeManagers) != 1 {
 		t.Fatalf("node managers after reload = %d", len(collectorWorker.nodeManagers))
 	}
-	status := collectorWorker.nodeManagers[0].Status()
+	status := collectorWorker.nodeManagers[0].manager.Status()
 	if status.Upstream != upstream.URL || status.Mode != "http" || status.Queue != "usage" {
 		t.Fatalf("node collector status = %#v", status)
 	}

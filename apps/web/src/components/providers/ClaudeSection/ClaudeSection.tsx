@@ -27,6 +27,7 @@ interface ClaudeSectionProps {
   onAdd: () => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
+  onTest?: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
 }
 
@@ -39,6 +40,7 @@ export function ClaudeSection({
   onAdd,
   onEdit,
   onDelete,
+  onTest,
   onToggle,
 }: ClaudeSectionProps) {
   const { t } = useTranslation();
@@ -85,6 +87,7 @@ export function ClaudeSection({
           emptyDescription={t('ai_providers.claude_empty_desc')}
           onEdit={(_, index) => onEdit(index)}
           onDelete={(_, index) => onDelete(index)}
+          onTest={onTest ? (_, index) => onTest(index) : undefined}
           actionsDisabled={actionsDisabled}
           getRowDisabled={(item) => hasDisableAllModelsRule(item.excludedModels)}
           renderExtraActions={(item, index) => (

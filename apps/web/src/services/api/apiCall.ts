@@ -11,6 +11,8 @@ export interface ApiCallRequest {
   url: string;
   header?: Record<string, string>;
   data?: string;
+  proxyUrl?: string;
+  'proxy-url'?: string;
 }
 
 export interface ApiCallResult<T = unknown> {

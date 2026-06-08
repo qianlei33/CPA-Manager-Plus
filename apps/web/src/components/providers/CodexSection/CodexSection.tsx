@@ -42,6 +42,7 @@ interface CodexSectionProps {
   onAdd: () => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
+  onTest?: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
 }
 
@@ -54,6 +55,7 @@ export function CodexSection({
   onAdd,
   onEdit,
   onDelete,
+  onTest,
   onToggle,
 }: CodexSectionProps) {
   const { t } = useTranslation();
@@ -359,6 +361,7 @@ export function CodexSection({
             emptyDescription={t('ai_providers.codex_empty_desc')}
             onEdit={(item) => onEdit(item.originalIndex)}
             onDelete={(item) => onDelete(item.originalIndex)}
+            onTest={onTest ? (item) => onTest(item.originalIndex) : undefined}
             actionsDisabled={actionsDisabled}
             getRowDisabled={(item) => hasDisableAllModelsRule(item.config.excludedModels)}
             renderExtraActions={(item) => (

@@ -57,7 +57,8 @@ export default defineConfig({
       '/setup': 'http://127.0.0.1:18317',
       '/status': 'http://127.0.0.1:18317',
       '/usage-service': 'http://127.0.0.1:18317',
-      '/v0': 'http://127.0.0.1:18317'
+      '/v0': 'http://127.0.0.1:18317',
+      '/v1': 'http://127.0.0.1:18317'
     }
   },
   css: {

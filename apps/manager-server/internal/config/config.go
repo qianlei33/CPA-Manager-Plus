@@ -205,7 +205,32 @@ func executableConfigPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve executable path: %w", err)
 	}
-	return filepath.Join(filepath.Dir(executable), defaultConfigName), nil
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve working directory: %w", err)
+	}
+	return defaultConfigPath(executable, workingDir), nil
+}
+
+func defaultConfigPath(executable string, workingDir string) string {
+	if isGoRunExecutable(executable) && strings.TrimSpace(workingDir) != "" {
+		return filepath.Join(workingDir, defaultConfigName)
+	}
+	return filepath.Join(filepath.Dir(executable), defaultConfigName)
+}
+
+func isGoRunExecutable(executable string) bool {
+	executable = filepath.Clean(strings.TrimSpace(executable))
+	if executable == "." || executable == "" {
+		return false
+	}
+	parts := strings.Split(filepath.ToSlash(executable), "/")
+	for _, part := range parts {
+		if strings.HasPrefix(part, "go-build") {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeCollectorMode(value string) string {

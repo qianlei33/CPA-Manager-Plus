@@ -6,12 +6,14 @@ import { create } from 'zustand';
 import { modelsApi } from '@/services/api/models';
 import { CACHE_EXPIRY_MS } from '@/utils/constants';
 import type { ModelInfo } from '@/utils/models';
+import { useCPANodeStore } from './useCPANodeStore';
 
 interface ModelsCache {
   data: ModelInfo[];
   timestamp: number;
   apiBase: string;
   apiKey: string;
+  nodeId: string;
 }
 
 interface ModelsState {
@@ -34,6 +36,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   fetchModels: async (apiBase, apiKey, forceRefresh = false) => {
     const { cache, isCacheValid } = get();
     const apiKeyScope = apiKey?.trim() || '';
+    const nodeId = useCPANodeStore.getState().currentNodeId;
 
     // 检查缓存
     if (!forceRefresh && isCacheValid(apiBase, apiKeyScope) && cache) {
@@ -44,13 +47,14 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     set({ loading: true, error: null });
 
     try {
-      const list = await modelsApi.fetchModels(apiBase, apiKeyScope || undefined);
+      const headers = nodeId ? { 'X-CPA-Node-ID': nodeId } : undefined;
+      const list = await modelsApi.fetchModels(apiBase, apiKeyScope || undefined, headers);
       const now = Date.now();
 
       set({
         models: list,
         loading: false,
-        cache: { data: list, timestamp: now, apiBase, apiKey: apiKeyScope }
+        cache: { data: list, timestamp: now, apiBase, apiKey: apiKeyScope, nodeId }
       });
 
       return list;
@@ -72,8 +76,10 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
   isCacheValid: (apiBase, apiKey) => {
     const { cache } = get();
+    const nodeId = useCPANodeStore.getState().currentNodeId;
     if (!cache) return false;
     if (cache.apiBase !== apiBase) return false;
+    if ((cache.nodeId || '') !== nodeId) return false;
     const apiKeyScope = apiKey?.trim() || '';
     if ((cache.apiKey || '') !== apiKeyScope) return false;
     return Date.now() - cache.timestamp < CACHE_EXPIRY_MS;

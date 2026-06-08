@@ -102,7 +102,11 @@ import { useInterval } from '@/hooks/useInterval';
 import { useRequestMonitoringAvailability } from '@/hooks/useRequestMonitoringAvailability';
 import { isFileLogsAvailable } from '@/features/logs/logFeatureAvailability';
 import { authFilesApi } from '@/services/api';
-import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
+import {
+  usageServiceApi,
+  type UsageServiceNodeCollectorStatus,
+} from '@/services/api/usageService';
+import { useAuthStore, useConfigStore, useCPANodeStore, useNotificationStore } from '@/stores';
 import { formatFileSize } from '@/utils/format';
 import type { StatusBarData } from '@/utils/recentRequests';
 import { downloadBlob } from '@/utils/download';
@@ -122,10 +126,18 @@ const EMPTY_STATUS_BAR_DATA: StatusBarData = {
   totalFailure: 0,
 };
 
+function formatCollectorTime(value: number | undefined, locale: string): string {
+  if (!value) return '--';
+  return new Date(value).toLocaleTimeString(locale);
+}
+
 export function MonitoringCenterPage() {
   const { t, i18n } = useTranslation();
   const config = useConfigStore((state) => state.config);
+  const managementKey = useAuthStore((state) => state.managementKey);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
+  const currentNodeId = useCPANodeStore((state) => state.currentNodeId);
+  const currentNode = useCPANodeStore((state) => state.nodes.find((node) => node.id === state.currentNodeId));
   const showNotification = useNotificationStore((state) => state.showNotification);
   const showConfirmation = useNotificationStore((state) => state.showConfirmation);
   const requestMonitoringAvailability = useRequestMonitoringAvailability();
@@ -184,6 +196,7 @@ export function MonitoringCenterPage() {
   const [activeDataTab, setActiveDataTab] = useState<MonitoringDataTab>(
     initialMonitoringCenterUiState.current.activeDataTab
   );
+  const [nodeCollectorStatus, setNodeCollectorStatus] = useState<UsageServiceNodeCollectorStatus | null>(null);
   const [accountOverviewMode, setAccountOverviewMode] = useState<MonitoringAccountOverviewMode>(
     initialAccountOverviewUiState.current.mode
   );
@@ -326,9 +339,28 @@ export function MonitoringCenterPage() {
     scopeFilters: monitoringScopeFilters,
   });
 
+  const loadNodeCollectorStatus = useCallback(async () => {
+    const serviceBase = requestMonitoringAvailability.serviceBase;
+    if (!serviceBase || !currentNodeId) {
+      setNodeCollectorStatus(null);
+      return;
+    }
+    try {
+      const status = await usageServiceApi.getStatus(serviceBase, managementKey);
+      const nextStatus = status.nodeCollectors?.find((item) => item.nodeId === currentNodeId) ?? null;
+      setNodeCollectorStatus(nextStatus);
+    } catch {
+      setNodeCollectorStatus(null);
+    }
+  }, [currentNodeId, managementKey, requestMonitoringAvailability.serviceBase]);
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadApiKeyAliases(), refreshMeta(false)]);
-  }, [loadApiKeyAliases, refreshMeta]);
+    await Promise.all([loadApiKeyAliases(), refreshMeta(false), loadNodeCollectorStatus()]);
+  }, [loadApiKeyAliases, loadNodeCollectorStatus, refreshMeta]);
+
+  useEffect(() => {
+    void loadNodeCollectorStatus();
+  }, [loadNodeCollectorStatus]);
 
   const setCurrentAccountPage = useCallback(
     (page: number) => {
@@ -1224,6 +1256,27 @@ export function MonitoringCenterPage() {
           />
         }
       />
+
+      <section className={styles.collectorStatusPanel} aria-label="当前节点采集状态">
+        <div>
+          <strong>当前节点采集状态</strong>
+          <span>{currentNode?.name || '未选择节点'}</span>
+        </div>
+        <div className={styles.collectorStatusMeta}>
+          <span>状态：{nodeCollectorStatus?.status?.collector || '未运行'}</span>
+          <span>传输：{nodeCollectorStatus?.status?.transport || '--'}</span>
+          <span>队列：{nodeCollectorStatus?.status?.queue || '--'}</span>
+          <span>
+            最近消费：{formatCollectorTime(nodeCollectorStatus?.status?.lastConsumedAt, i18n.language)}
+          </span>
+          <span>
+            最近写入：{formatCollectorTime(nodeCollectorStatus?.status?.lastInsertedAt, i18n.language)}
+          </span>
+          {nodeCollectorStatus?.status?.lastError ? (
+            <span className={styles.collectorStatusError}>{nodeCollectorStatus.status.lastError}</span>
+          ) : null}
+        </div>
+      </section>
 
       <MonitoringFiltersPanel
         timeRange={timeRange}

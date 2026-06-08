@@ -53,6 +53,14 @@ type Context struct {
 // CollectorReloader reloads node-scoped collectors after CPA node changes.
 type CollectorReloader interface {
 	ReloadNodes(ctx context.Context) error
+	NodeStatuses() []NodeCollectorStatus
+}
+
+// NodeCollectorStatus describes one node-scoped collector runtime.
+type NodeCollectorStatus struct {
+	NodeID   string           `json:"nodeId"`
+	NodeName string           `json:"nodeName"`
+	Status   collector.Status `json:"status"`
 }
 
 func FromExisting(

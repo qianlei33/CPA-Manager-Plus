@@ -60,12 +60,19 @@ export interface UsageServiceCollectorStatus {
   lastError?: string;
 }
 
+export interface UsageServiceNodeCollectorStatus {
+  nodeId?: string;
+  nodeName?: string;
+  status?: UsageServiceCollectorStatus;
+}
+
 export interface UsageServiceStatus {
   service?: string;
   dbPath?: string;
   events?: number;
   deadLetters?: number;
   collector?: UsageServiceCollectorStatus;
+  nodeCollectors?: UsageServiceNodeCollectorStatus[];
 }
 
 export interface UsageServiceSetupRequest {

@@ -55,6 +55,7 @@ interface OpenAISectionProps {
   onAdd: () => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
+  onTest?: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
 }
 
@@ -76,6 +77,7 @@ export function OpenAISection({
   onAdd,
   onEdit,
   onDelete,
+  onTest,
   onToggle,
 }: OpenAISectionProps) {
   const { t } = useTranslation();
@@ -594,6 +596,16 @@ export function OpenAISection({
           <ProviderStatusBar statusData={statusData} />
         </div>
         <div className={styles.openaiProviderActions}>
+          {onTest ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => onTest(originalIndex)}
+              disabled={actionsDisabled}
+            >
+              测试
+            </Button>
+          ) : null}
           <Button
             variant="secondary"
             size="sm"

@@ -169,6 +169,29 @@ func TestNormalizeCollectorMode(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigPathUsesWorkingDirForGoRunExecutable(t *testing.T) {
+	workingDir := filepath.Join("C:", "repo", "apps", "manager-server")
+	executable := filepath.Join(os.TempDir(), "go-build123456", "b001", "exe", "cpa-manager-plus.exe")
+
+	got := defaultConfigPath(executable, workingDir)
+	want := filepath.Join(workingDir, defaultConfigName)
+	if got != want {
+		t.Fatalf("defaultConfigPath() = %q, want %q", got, want)
+	}
+}
+
+func TestDefaultConfigPathUsesExecutableDirForBuiltBinary(t *testing.T) {
+	executableDir := filepath.Join("C:", "apps", "cpa-manager-plus")
+	executable := filepath.Join(executableDir, "cpa-manager-plus.exe")
+	workingDir := filepath.Join("C:", "repo", "apps", "manager-server")
+
+	got := defaultConfigPath(executable, workingDir)
+	want := filepath.Join(executableDir, defaultConfigName)
+	if got != want {
+		t.Fatalf("defaultConfigPath() = %q, want %q", got, want)
+	}
+}
+
 func clearConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{

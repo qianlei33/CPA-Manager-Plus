@@ -10,6 +10,7 @@ interface ProviderListProps<T> {
   renderContent: (item: T, index: number) => ReactNode;
   onEdit: (item: T, index: number) => void;
   onDelete: (item: T, index: number) => void;
+  onTest?: (item: T, index: number) => void;
   emptyTitle: string;
   emptyDescription: string;
   deleteLabel?: string;
@@ -29,6 +30,7 @@ export function ProviderList<T>({
   renderContent,
   onEdit,
   onDelete,
+  onTest,
   emptyTitle,
   emptyDescription,
   deleteLabel,
@@ -62,6 +64,16 @@ export function ProviderList<T>({
           >
             <div className={metaClassName ?? 'item-meta'}>{renderContent(item, index)}</div>
             <div className={actionsClassName ?? 'item-actions'}>
+              {onTest ? (
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  onClick={() => onTest(item, index)}
+                  disabled={actionsDisabled}
+                >
+                  测试
+                </Button>
+              ) : null}
               <Button
                 variant="secondary"
                 size="xs"

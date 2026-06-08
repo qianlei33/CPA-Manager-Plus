@@ -40,11 +40,18 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	}
 	status := h.App.CollectorService.Status()
 	status.DeadLetters = deadLetters
+	nodeStatuses := []any{}
+	if h.App.CollectorReloader != nil {
+		for _, nodeStatus := range h.App.CollectorReloader.NodeStatuses() {
+			nodeStatuses = append(nodeStatuses, nodeStatus)
+		}
+	}
 	response.JSON(w, http.StatusOK, map[string]any{
-		"service":     h.App.ServiceID,
-		"dbPath":      h.App.Config.DBPath,
-		"events":      events,
-		"deadLetters": deadLetters,
-		"collector":   status,
+		"service":        h.App.ServiceID,
+		"dbPath":         h.App.Config.DBPath,
+		"events":         events,
+		"deadLetters":    deadLetters,
+		"collector":      status,
+		"nodeCollectors": nodeStatuses,
 	})
 }
