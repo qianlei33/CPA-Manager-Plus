@@ -55,6 +55,32 @@ func (w *CodexInspectionWorker) tick(ctx context.Context) {
 	if triggerKey == "" || !model.CodexInspectionScheduleDue(now, w.lastScheduledRunTime(ctx), cfg) {
 		return
 	}
+	nodes, err := w.store.CPANodes.ListEnabled(ctx)
+	if err != nil {
+		log.Printf("load CPA nodes for codex inspection: %v", err)
+		return
+	}
+	if len(nodes) > 0 {
+		for _, node := range nodes {
+			if _, ok, err := w.store.GetLatestCodexInspectionRunByNodeAndTrigger(ctx, node.ID, model.CodexInspectionTriggerScheduled, triggerKey); err != nil {
+				log.Printf("load codex inspection trigger for node %s: %v", node.ID, err)
+				continue
+			} else if ok {
+				continue
+			}
+			nodeID := node.ID
+			go func() {
+				if _, err := w.service.Run(ctx, codexinspectionservice.RunRequest{
+					NodeID:      nodeID,
+					TriggerType: model.CodexInspectionTriggerScheduled,
+					TriggerKey:  triggerKey,
+				}); err != nil && err != codexinspectionservice.ErrRunAlreadyActive {
+					log.Printf("run scheduled codex inspection for node %s: %v", nodeID, err)
+				}
+			}()
+		}
+		return
+	}
 	if _, ok, err := w.store.GetLatestCodexInspectionRunByTrigger(ctx, model.CodexInspectionTriggerScheduled, triggerKey); err != nil {
 		log.Printf("load codex inspection trigger: %v", err)
 		return

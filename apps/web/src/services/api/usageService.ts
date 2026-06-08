@@ -148,8 +148,50 @@ export interface ManagerConfigResponse {
   cpaUsage?: CPAUsageConfig;
 }
 
+export interface CPANode {
+  id: string;
+  name: string;
+  baseUrl: string;
+  enabled: boolean;
+  description?: string;
+  collectorEnabled?: boolean;
+  collectorMode?: string;
+  queue?: string;
+  popSide?: string;
+  batchSize?: number;
+  pollIntervalMs?: number;
+  queryLimit?: number;
+  tlsSkipVerify?: boolean;
+  createdAtMs?: number;
+  updatedAtMs?: number;
+}
+
+export interface CPANodeInput {
+  name: string;
+  baseUrl: string;
+  managementKey?: string;
+  enabled: boolean;
+  description?: string;
+  collectorEnabled?: boolean;
+  collectorMode?: string;
+  queue?: string;
+  popSide?: string;
+  batchSize?: number;
+  pollIntervalMs?: number;
+  queryLimit?: number;
+  tlsSkipVerify?: boolean;
+  ensureUsageStatisticsEnabled?: boolean;
+  requestMonitoringEnabled?: boolean;
+}
+
+export interface CPANodesResponse {
+  nodes: CPANode[];
+}
+
 export interface CodexInspectionRun {
   id: number;
+  nodeId?: string;
+  nodeNameSnapshot?: string;
   triggerType: string;
   triggerKey?: string;
   status: string;
@@ -174,6 +216,8 @@ export interface CodexInspectionRun {
 export interface CodexInspectionResult {
   id: number;
   runId: number;
+  nodeId?: string;
+  nodeNameSnapshot?: string;
   accountKey: string;
   fileName: string;
   displayAccount: string;
@@ -472,6 +516,7 @@ export interface DashboardSummaryResponse {
 }
 
 export interface DashboardSummaryParams {
+  nodeId?: string;
   todayStartMs: number;
   nowMs?: number;
   topModels?: number;
@@ -514,6 +559,7 @@ export interface MonitoringAnalyticsInclude {
 }
 
 export interface MonitoringAnalyticsRequest {
+  nodeId?: string;
   from_ms: number;
   to_ms: number;
   now_ms?: number;
@@ -933,6 +979,29 @@ export const usageServiceApi = {
     });
   },
 
+  initializeAdminToken: async (base: string, token: string): Promise<void> => {
+    await withUsageServiceError(async () => {
+      await axios.post(
+        buildUrl(base, '/v0/management/admin-token/init'),
+        { token },
+        { timeout: USAGE_SERVICE_TIMEOUT_MS }
+      );
+    });
+  },
+
+  rotateAdminToken: async (base: string, managementKey: string, token: string): Promise<void> => {
+    await withUsageServiceError(async () => {
+      await axios.put(
+        buildUrl(base, '/v0/management/admin-token'),
+        { token },
+        {
+          timeout: USAGE_SERVICE_TIMEOUT_MS,
+          headers: authHeaders(managementKey),
+        }
+      );
+    });
+  },
+
   getManagerConfig: async (
     base: string,
     managementKey?: string
@@ -970,7 +1039,8 @@ export const usageServiceApi = {
   listCodexInspectionRuns: async (
     base: string,
     managementKey?: string,
-    limit = 20
+    limit = 20,
+    nodeId?: string
   ): Promise<CodexInspectionRunsResponse> => {
     return withUsageServiceError(async () => {
       const response = await axios.get<CodexInspectionRunsResponse>(
@@ -978,7 +1048,7 @@ export const usageServiceApi = {
         {
           timeout: USAGE_SERVICE_TIMEOUT_MS,
           headers: authHeaders(managementKey),
-          params: { limit },
+          params: { limit, ...(nodeId ? { nodeId } : {}) },
         }
       );
       return response.data;
@@ -1004,12 +1074,13 @@ export const usageServiceApi = {
 
   runCodexInspection: async (
     base: string,
-    managementKey?: string
+    managementKey?: string,
+    nodeId?: string
   ): Promise<CodexInspectionRunDetail> => {
     return withUsageServiceError(async () => {
       const response = await axios.post<CodexInspectionRunDetail>(
         buildUrl(base, '/v0/management/codex-inspection/run'),
-        undefined,
+        nodeId ? { nodeId } : {},
         {
           timeout: CODEX_INSPECTION_RUN_TIMEOUT_MS,
           headers: authHeaders(managementKey),
@@ -1206,18 +1277,86 @@ export const usageServiceApi = {
   refreshCodexTokens: async (
     base: string,
     managementKey: string | undefined,
-    names: string[]
+    names: string[],
+    nodeId?: string
   ): Promise<CodexRefreshResponse> => {
     return withUsageServiceError(async () => {
       const response = await axios.post<CodexRefreshResponse>(
         buildUrl(base, '/v0/management/auth-files/refresh-token'),
-        { names },
+        { names, ...(nodeId ? { nodeId } : {}) },
         {
           timeout: 30 * 1000,
           headers: authHeaders(managementKey),
         }
       );
       return response.data;
+    });
+  },
+};
+
+export const cpaNodeApi = {
+  list: async (base: string, managementKey?: string): Promise<CPANode[]> => {
+    return withUsageServiceError(async () => {
+      const response = await axios.get<CPANodesResponse>(buildUrl(base, '/v0/management/cpa-nodes'), {
+        timeout: USAGE_SERVICE_TIMEOUT_MS,
+        headers: authHeaders(managementKey),
+      });
+      return response.data.nodes;
+    });
+  },
+
+  create: async (
+    base: string,
+    managementKey: string | undefined,
+    node: CPANodeInput
+  ): Promise<CPANode> => {
+    return withUsageServiceError(async () => {
+      const response = await axios.post<CPANode>(buildUrl(base, '/v0/management/cpa-nodes'), node, {
+        timeout: USAGE_SERVICE_TIMEOUT_MS,
+        headers: authHeaders(managementKey),
+      });
+      return response.data;
+    });
+  },
+
+  update: async (
+    base: string,
+    managementKey: string | undefined,
+    id: string,
+    node: CPANodeInput
+  ): Promise<CPANode> => {
+    return withUsageServiceError(async () => {
+      const response = await axios.put<CPANode>(
+        buildUrl(base, `/v0/management/cpa-nodes/${encodeURIComponent(id)}`),
+        node,
+        {
+          timeout: USAGE_SERVICE_TIMEOUT_MS,
+          headers: authHeaders(managementKey),
+        }
+      );
+      return response.data;
+    });
+  },
+
+  remove: async (base: string, managementKey: string | undefined, id: string): Promise<void> => {
+    await withUsageServiceError(async () => {
+      await axios.delete(buildUrl(base, `/v0/management/cpa-nodes/${encodeURIComponent(id)}`), {
+        timeout: USAGE_SERVICE_TIMEOUT_MS,
+        headers: authHeaders(managementKey),
+      });
+    });
+  },
+
+  validate: async (base: string, managementKey: string | undefined, id: string): Promise<void> => {
+    await withUsageServiceError(async () => {
+      await axios.post(
+        buildUrl(base, `/v0/management/cpa-nodes/${encodeURIComponent(id)}/validate`),
+        {},
+        {
+          timeout: USAGE_SERVICE_TIMEOUT_MS,
+          headers: authHeaders(managementKey),
+        }
+      );
     });
   },
 };
@@ -1232,16 +1371,18 @@ export const dashboardApi = {
       const query: Record<string, number> = {
         today_start_ms: params.todayStartMs,
       };
+      const queryWithNode: Record<string, number | string> = query;
       if (params.nowMs !== undefined) query.now_ms = params.nowMs;
       if (params.topModels !== undefined) query.top_models = params.topModels;
       if (params.recentFailures !== undefined) query.recent_failures = params.recentFailures;
+      if (params.nodeId) queryWithNode.nodeId = params.nodeId;
 
       const response = await axios.get<DashboardSummaryResponse>(
         buildUrl(base, '/v0/management/dashboard/summary'),
         {
           timeout: USAGE_SERVICE_TIMEOUT_MS,
           headers: authHeaders(managementKey),
-          params: query,
+          params: queryWithNode,
         }
       );
       return response.data;

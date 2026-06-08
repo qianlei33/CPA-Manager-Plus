@@ -8,16 +8,22 @@ import (
 	"net/url"
 	"strings"
 
+	cpanodesvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/cpanode"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/managerconfig"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/store"
 )
 
 type Service struct {
 	managerConfigService *managerconfig.Service
+	cpaNodeService       *cpanodesvc.Service
 }
 
-func New(managerConfigService *managerconfig.Service) *Service {
-	return &Service{managerConfigService: managerConfigService}
+func New(managerConfigService *managerconfig.Service, cpaNodeService ...*cpanodesvc.Service) *Service {
+	var nodeService *cpanodesvc.Service
+	if len(cpaNodeService) > 0 {
+		nodeService = cpaNodeService[0]
+	}
+	return &Service{managerConfigService: managerConfigService, cpaNodeService: nodeService}
 }
 
 func (s *Service) ProxyManagement(w http.ResponseWriter, r *http.Request, writeError func(http.ResponseWriter, int, error)) {
@@ -29,13 +35,9 @@ func (s *Service) ProxyCPA(w http.ResponseWriter, r *http.Request, writeError fu
 }
 
 func (s *Service) proxyWithSavedManagementKey(w http.ResponseWriter, r *http.Request, writeError func(http.ResponseWriter, int, error)) {
-	setup, ok, err := s.resolveSetup(r.Context())
+	setup, err := s.resolveSetup(r.Context(), r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusPreconditionRequired, errors.New("usage service is not configured"))
+		writeError(w, proxySetupErrorStatus(err), err)
 		return
 	}
 	target, err := url.Parse(setup.CPAUpstreamURL)
@@ -63,13 +65,9 @@ func (s *Service) ProxyModelList(w http.ResponseWriter, r *http.Request, writeEr
 		methodNotAllowed(w)
 		return
 	}
-	setup, ok, err := s.resolveSetup(r.Context())
+	setup, err := s.resolveSetup(r.Context(), r)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusPreconditionRequired, errors.New("usage service is not configured"))
+		writeError(w, proxySetupErrorStatus(err), err)
 		return
 	}
 	target, err := url.Parse(setup.CPAUpstreamURL)
@@ -159,6 +157,52 @@ var cpaProxyPathPrefixes = []string{
 	"/request-log-by-id",
 }
 
-func (s *Service) resolveSetup(ctx context.Context) (store.Setup, bool, error) {
-	return s.managerConfigService.ResolveSetup(ctx)
+func (s *Service) resolveSetup(ctx context.Context, r *http.Request) (store.Setup, error) {
+	if s.cpaNodeService != nil {
+		nodeID := resolveNodeIDFromRequest(r)
+		if nodeID != "" {
+			return s.cpaNodeService.ResolveSetup(ctx, nodeID)
+		}
+		// Transitional compatibility: existing tests and single-node deployments may
+		// still rely on the old saved setup until a CPA node has been created.
+		if nodes, err := s.cpaNodeService.EnabledNodes(ctx); err != nil {
+			return store.Setup{}, err
+		} else if len(nodes) > 0 {
+			return store.Setup{}, cpanodesvc.ErrNodeIDRequired
+		}
+	}
+	setup, ok, err := s.managerConfigService.ResolveSetup(ctx)
+	if err != nil {
+		return store.Setup{}, err
+	}
+	if !ok {
+		return store.Setup{}, errors.New("usage service is not configured")
+	}
+	return setup, nil
+}
+
+func resolveNodeIDFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if value := strings.TrimSpace(r.URL.Query().Get("nodeId")); value != "" {
+		return value
+	}
+	return strings.TrimSpace(r.Header.Get("X-CPA-Node-ID"))
+}
+
+func proxySetupErrorStatus(err error) int {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "nodeId is required"):
+		return http.StatusBadRequest
+	case strings.Contains(message, "not found"):
+		return http.StatusNotFound
+	case strings.Contains(message, "disabled"):
+		return http.StatusBadRequest
+	case strings.Contains(message, "not configured"):
+		return http.StatusPreconditionRequired
+	default:
+		return http.StatusInternalServerError
+	}
 }

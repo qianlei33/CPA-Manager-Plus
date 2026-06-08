@@ -16,7 +16,6 @@ import (
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/httpapi"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/security"
 	bootstrapservice "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/bootstrap"
-	collectorservice "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/collector"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/store"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/worker"
 )
@@ -71,14 +70,18 @@ func runServer() {
 	}
 
 	manager := collector.NewManager(cfg, db)
-	collectorService := collectorservice.New(manager)
-	collectorWorker := worker.NewCollectorWorker(cfg, db, collectorService)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	collectorWorker.Start(ctx)
-
 	serverApp := httpapi.New(cfg, db, manager)
+	collectorWorker := worker.NewCollectorWorker(
+		cfg,
+		db,
+		serverApp.AppContext().CollectorService,
+		serverApp.AppContext().CPANodeService,
+	)
+	serverApp.AppContext().CollectorReloader = collectorWorker
+	collectorWorker.Start(ctx)
 	codexInspectionWorker := worker.NewCodexInspectionWorker(serverApp.AppContext().Store, serverApp.AppContext().CodexInspectionService)
 	codexInspectionWorker.Start(ctx)
 

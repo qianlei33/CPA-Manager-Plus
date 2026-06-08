@@ -69,6 +69,7 @@ func parseSummaryParams(r *http.Request) (dashboardsvc.SummaryParams, error) {
 	}
 
 	return dashboardsvc.SummaryParams{
+		NodeID:         strings.TrimSpace(query.Get("nodeId")),
 		TodayStartMS:   todayStartMS,
 		NowMS:          nowMS,
 		TopModels:      topModels,

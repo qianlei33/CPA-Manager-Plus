@@ -13,6 +13,7 @@ const (
 )
 
 type AnalyticsFilter struct {
+	NodeID            string
 	FromMS            int64
 	ToMS              int64
 	SearchQuery       string
@@ -335,6 +336,42 @@ order by bucket_ms`, bucketSize, bucketSize, where)
 		if err := rows.Scan(&point.BucketMS, &point.Calls, &point.Tokens, &point.Success, &point.Failure); err != nil {
 			return nil, err
 		}
+		points = append(points, point)
+	}
+	return points, rows.Err()
+}
+
+func (r *repository) BucketTimelineWithFilter(ctx context.Context, filter AnalyticsFilter, bucketMs int64) ([]TimelinePoint, error) {
+	if bucketMs <= 0 {
+		bucketMs = 3600000
+	}
+	where, args := analyticsWhere(filter)
+	args = append([]any{filter.FromMS, bucketMs}, args...)
+	rows, err := r.db.QueryContext(ctx, `select
+	cast((timestamp_ms - ?) / ? as integer) as bucket_index,
+	count(*),
+	coalesce(sum(total_tokens), 0),
+	sum(case when failed = 0 then 1 else 0 end),
+	sum(case when failed = 1 then 1 else 0 end)
+from usage_events `+where+`
+group by bucket_index
+order by bucket_index`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := make([]TimelinePoint, 0)
+	for rows.Next() {
+		var bucketIndex int64
+		var point TimelinePoint
+		if err := rows.Scan(&bucketIndex, &point.Calls, &point.Tokens, &point.Success, &point.Failure); err != nil {
+			return nil, err
+		}
+		if bucketIndex < 0 {
+			continue
+		}
+		point.BucketMS = filter.FromMS + bucketIndex*bucketMs
 		points = append(points, point)
 	}
 	return points, rows.Err()
@@ -896,6 +933,11 @@ func analyticsWhere(filter AnalyticsFilter) (string, []any) {
 
 	query := strings.TrimSpace(strings.ToLower(filter.SearchQuery))
 	hash := strings.TrimSpace(strings.ToLower(filter.SearchAPIKeyHash))
+	nodeID := strings.TrimSpace(filter.NodeID)
+	if nodeID != "" {
+		conditions = append(conditions, "coalesce(node_id, '') = ?")
+		args = append(args, nodeID)
+	}
 	if query != "" {
 		like := "%" + query + "%"
 		if hash != "" {

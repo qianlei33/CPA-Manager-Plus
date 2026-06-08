@@ -1,0 +1,355 @@
+.page {
+  display: grid;
+  gap: 24px;
+}
+
+.header {
+  display: grid;
+  gap: 8px;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.header p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-surface-muted);
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 150px;
+  gap: 12px;
+  flex: 1 1 420px;
+}
+
+.filterField {
+  display: grid;
+  gap: 6px;
+}
+
+.filterField label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.filterInput,
+.filterSelect {
+  min-height: 38px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface);
+  color: var(--text-primary);
+  padding: 0 12px;
+}
+
+.nodeCard {
+  min-height: 156px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-surface-muted);
+  box-shadow: var(--glass-shadow);
+}
+
+.nodeMeta,
+.nodeDescription {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.nodeCard {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.nodeCardActive {
+  border-color: var(--primary-color);
+  background: var(--app-accent-soft);
+}
+
+.nodeTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.nodeTitle {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nodeName {
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.nodeUrl {
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: var(--app-surface-strong);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.badgeEnabled {
+  color: var(--primary-color);
+  background: var(--app-accent-soft);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wizard {
+  width: min(680px, calc(100vw - 28px));
+  height: 100vh;
+  align-content: start;
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-left: 1px solid var(--app-border);
+  border-radius: 0;
+  background: var(--glass-bg);
+  box-shadow: var(--glass-shadow);
+  overflow: auto;
+}
+
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+  background: color-mix(in srgb, #000 28%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.drawerHeader h2 {
+  margin: 0;
+}
+
+.drawerHeader p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  align-items: start;
+}
+
+.stepButton {
+  position: relative;
+  border: 0;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.stepButton:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: calc(50% + 20px);
+  right: calc(-50% + 20px);
+  height: 2px;
+  background: color-mix(in srgb, var(--primary-color) 24%, var(--app-border));
+}
+
+.stepButtonActive {
+  color: var(--primary-color);
+  font-weight: 700;
+}
+
+.stepIndex {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--app-surface-strong);
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 800;
+  position: relative;
+  z-index: 1;
+}
+
+.stepButtonActive .stepIndex {
+  background: var(--primary-color);
+  color: white;
+}
+
+.stepCopy {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.stepProgress {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: var(--app-accent-soft);
+  color: var(--primary-color);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.drawerGrid {
+  display: block;
+}
+
+.fieldHint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .steps {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .stepButton {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    justify-items: start;
+  }
+
+  .stepButton::after {
+    display: none;
+  }
+}
+
+.fields,
+.review {
+  display: grid;
+  gap: 12px;
+}
+
+.review {
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-muted);
+}
+
+.wizardActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.advancedSection {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  overflow: hidden;
+}
+
+.advancedToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 0;
+  background: var(--app-surface-muted);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.advancedToggleIcon {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.advancedContent {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.advancedField {
+  display: grid;
+  gap: 6px;
+}
+
+.advancedField label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.advancedSelect {
+  min-height: 38px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface);
+  color: var(--text-primary);
+  padding: 0 12px;
+}

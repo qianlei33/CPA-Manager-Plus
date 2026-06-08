@@ -30,7 +30,15 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 			response.MethodNotAllowed(w)
 			return
 		}
+		var req struct {
+			NodeID string `json:"nodeId"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.NodeID == "" {
+			req.NodeID = r.URL.Query().Get("nodeId")
+		}
 		result, err := h.App.CodexInspectionService.Run(context.WithoutCancel(r.Context()), codexsvc.RunRequest{
+			NodeID:      req.NodeID,
 			TriggerType: "manual",
 			TriggerKey:  "manual",
 		})
@@ -50,7 +58,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 				limit = parsed
 			}
 		}
-		runs, err := h.App.CodexInspectionService.ListRuns(r.Context(), limit)
+		runs, err := h.App.CodexInspectionService.ListRunsForNode(r.Context(), r.URL.Query().Get("nodeId"), limit)
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, err)
 			return

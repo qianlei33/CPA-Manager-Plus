@@ -55,22 +55,15 @@ func TestRunMigratesLegacySetupAndEncryptsSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	if !result.AdminCreated || result.GeneratedAdminKey == "" {
+	if result.AdminCreated || result.GeneratedAdminKey != "" || result.State.AdminReady {
 		t.Fatalf("admin credential result = %#v", result)
 	}
 	if !result.MigratedLegacy || !result.HasHistoricalData || !result.State.ProjectInitialized {
 		t.Fatalf("bootstrap result = %#v", result)
 	}
 
-	credential, ok, err := st.LoadAdminCredential(context.Background())
-	if err != nil || !ok {
+	if _, ok, err := st.LoadAdminCredential(context.Background()); err != nil || ok {
 		t.Fatalf("load admin credential ok=%v err=%v", ok, err)
-	}
-	if !security.VerifyAdminKey(credential, result.GeneratedAdminKey) {
-		t.Fatal("generated admin key does not verify")
-	}
-	if security.VerifyAdminKey(credential, "management-key") {
-		t.Fatal("cpa management key should not verify as admin key")
 	}
 
 	managerCfg, ok, err := st.LoadManagerConfig(context.Background())

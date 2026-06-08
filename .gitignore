@@ -42,5 +42,8 @@ TODO.md
 /bin/tmp/
 /bin/cpa-manager
 /data/usage.sqlite*
+/apps/manager-server/cmd/cpa-manager-plus/data/
 /run/*.pid
 /run/*.log
+package-lock.json
+/apps/manager-server/cmd/cpa-manager-plus/config.json

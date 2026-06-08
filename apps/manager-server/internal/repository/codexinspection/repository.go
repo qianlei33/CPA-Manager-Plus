@@ -16,8 +16,10 @@ type Repository interface {
 	InsertResult(ctx context.Context, result model.CodexInspectionResult) (model.CodexInspectionResult, error)
 	InsertLog(ctx context.Context, entry model.CodexInspectionLog) (model.CodexInspectionLog, error)
 	ListRuns(ctx context.Context, limit int) ([]model.CodexInspectionRun, error)
+	ListRunsForNode(ctx context.Context, nodeID string, limit int) ([]model.CodexInspectionRun, error)
 	GetRun(ctx context.Context, id int64) (model.CodexInspectionRun, bool, error)
 	GetLatestRunByTrigger(ctx context.Context, triggerType, triggerKey string) (model.CodexInspectionRun, bool, error)
+	GetLatestRunByNodeAndTrigger(ctx context.Context, nodeID, triggerType, triggerKey string) (model.CodexInspectionRun, bool, error)
 	ListResults(ctx context.Context, runID int64) ([]model.CodexInspectionResult, error)
 	ListLogs(ctx context.Context, runID int64) ([]model.CodexInspectionLog, error)
 }
@@ -48,11 +50,13 @@ func (r *repository) CreateRun(ctx context.Context, run model.CodexInspectionRun
 	res, err := r.db.ExecContext(
 		ctx,
 		`insert into codex_inspection_runs (
-			trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
+			node_id, node_name_snapshot, trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
 			total_files, probe_set_count, sampled_count, disabled_count, enabled_count,
 			delete_count, disable_count, enable_count, reauth_count, keep_count, error,
 			settings_json, created_at_ms, updated_at_ms
-		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		nullString(run.NodeID),
+		nullString(run.NodeNameSnapshot),
 		run.TriggerType,
 		nullString(run.TriggerKey),
 		run.Status,
@@ -147,12 +151,14 @@ func (r *repository) InsertResult(ctx context.Context, result model.CodexInspect
 	res, err := r.db.ExecContext(
 		ctx,
 		`insert into codex_inspection_results (
-			run_id, account_key, file_name, display_account, auth_index, account_id,
+			run_id, node_id, node_name_snapshot, account_key, file_name, display_account, auth_index, account_id,
 			provider, disabled, status, state, action, action_reason, status_code,
 			used_percent, is_quota, error, action_status, executed_action, action_error,
 			created_at_ms
-		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		on conflict(run_id, account_key) do update set
+			node_id = excluded.node_id,
+			node_name_snapshot = excluded.node_name_snapshot,
 			file_name = excluded.file_name,
 			display_account = excluded.display_account,
 			auth_index = excluded.auth_index,
@@ -172,6 +178,8 @@ func (r *repository) InsertResult(ctx context.Context, result model.CodexInspect
 			action_error = excluded.action_error,
 			created_at_ms = excluded.created_at_ms`,
 		result.RunID,
+		nullString(result.NodeID),
+		nullString(result.NodeNameSnapshot),
 		result.AccountKey,
 		result.FileName,
 		result.DisplayAccount,
@@ -228,20 +236,36 @@ func (r *repository) InsertLog(ctx context.Context, entry model.CodexInspectionL
 }
 
 func (r *repository) ListRuns(ctx context.Context, limit int) ([]model.CodexInspectionRun, error) {
+	return r.listRuns(ctx, "", limit)
+}
+
+func (r *repository) ListRunsForNode(ctx context.Context, nodeID string, limit int) ([]model.CodexInspectionRun, error) {
+	return r.listRuns(ctx, nodeID, limit)
+}
+
+func (r *repository) listRuns(ctx context.Context, nodeID string, limit int) ([]model.CodexInspectionRun, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
+	where := ""
+	args := []any{}
+	if nodeID != "" {
+		where = "where node_id = ?"
+		args = append(args, nodeID)
+	}
+	args = append(args, limit)
 	rows, err := r.db.QueryContext(
 		ctx,
 		`select
-			id, trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
+			id, node_id, node_name_snapshot, trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
 			total_files, probe_set_count, sampled_count, disabled_count, enabled_count,
 			delete_count, disable_count, enable_count, reauth_count, keep_count, error,
 			settings_json, created_at_ms, updated_at_ms
 		from codex_inspection_runs
+		`+where+`
 		order by started_at_ms desc, id desc
 		limit ?`,
-		limit,
+		args...,
 	)
 	if err != nil {
 		return nil, err
@@ -263,7 +287,7 @@ func (r *repository) GetRun(ctx context.Context, id int64) (model.CodexInspectio
 	row := r.db.QueryRowContext(
 		ctx,
 		`select
-			id, trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
+			id, node_id, node_name_snapshot, trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
 			total_files, probe_set_count, sampled_count, disabled_count, enabled_count,
 			delete_count, disable_count, enable_count, reauth_count, keep_count, error,
 			settings_json, created_at_ms, updated_at_ms
@@ -285,7 +309,7 @@ func (r *repository) GetLatestRunByTrigger(ctx context.Context, triggerType, tri
 	row := r.db.QueryRowContext(
 		ctx,
 		`select
-			id, trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
+			id, node_id, node_name_snapshot, trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
 			total_files, probe_set_count, sampled_count, disabled_count, enabled_count,
 			delete_count, disable_count, enable_count, reauth_count, keep_count, error,
 			settings_json, created_at_ms, updated_at_ms
@@ -306,11 +330,37 @@ func (r *repository) GetLatestRunByTrigger(ctx context.Context, triggerType, tri
 	return run, true, nil
 }
 
+func (r *repository) GetLatestRunByNodeAndTrigger(ctx context.Context, nodeID, triggerType, triggerKey string) (model.CodexInspectionRun, bool, error) {
+	row := r.db.QueryRowContext(
+		ctx,
+		`select
+			id, node_id, node_name_snapshot, trigger_type, trigger_key, status, started_at_ms, finished_at_ms,
+			total_files, probe_set_count, sampled_count, disabled_count, enabled_count,
+			delete_count, disable_count, enable_count, reauth_count, keep_count, error,
+			settings_json, created_at_ms, updated_at_ms
+		from codex_inspection_runs
+		where coalesce(node_id, '') = ? and trigger_type = ? and trigger_key = ?
+		order by started_at_ms desc, id desc
+		limit 1`,
+		nodeID,
+		triggerType,
+		triggerKey,
+	)
+	run, err := scanRun(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.CodexInspectionRun{}, false, nil
+	}
+	if err != nil {
+		return model.CodexInspectionRun{}, false, err
+	}
+	return run, true, nil
+}
+
 func (r *repository) ListResults(ctx context.Context, runID int64) ([]model.CodexInspectionResult, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
 		`select
-			id, run_id, account_key, file_name, display_account, auth_index, account_id,
+			id, run_id, node_id, node_name_snapshot, account_key, file_name, display_account, auth_index, account_id,
 			provider, disabled, status, state, action, action_reason, status_code,
 			used_percent, is_quota, error, action_status, executed_action, action_error,
 			created_at_ms
@@ -366,10 +416,12 @@ type scanner interface {
 
 func scanRun(row scanner) (model.CodexInspectionRun, error) {
 	var run model.CodexInspectionRun
-	var triggerKey, errorText sql.NullString
+	var nodeID, nodeNameSnapshot, triggerKey, errorText sql.NullString
 	var finishedAt sql.NullInt64
 	if err := row.Scan(
 		&run.ID,
+		&nodeID,
+		&nodeNameSnapshot,
 		&run.TriggerType,
 		&triggerKey,
 		&run.Status,
@@ -393,6 +445,8 @@ func scanRun(row scanner) (model.CodexInspectionRun, error) {
 		return model.CodexInspectionRun{}, err
 	}
 	run.TriggerKey = triggerKey.String
+	run.NodeID = nodeID.String
+	run.NodeNameSnapshot = nodeNameSnapshot.String
 	run.Error = errorText.String
 	if finishedAt.Valid {
 		run.FinishedAtMS = finishedAt.Int64
@@ -403,7 +457,7 @@ func scanRun(row scanner) (model.CodexInspectionRun, error) {
 
 func scanResult(row scanner) (model.CodexInspectionResult, error) {
 	var result model.CodexInspectionResult
-	var authIndex, accountID, provider, status, state, actionReason, errorText sql.NullString
+	var nodeID, nodeNameSnapshot, authIndex, accountID, provider, status, state, actionReason, errorText sql.NullString
 	var actionStatus, executedAction, actionError sql.NullString
 	var statusCode sql.NullInt64
 	var usedPercent sql.NullFloat64
@@ -411,6 +465,8 @@ func scanResult(row scanner) (model.CodexInspectionResult, error) {
 	if err := row.Scan(
 		&result.ID,
 		&result.RunID,
+		&nodeID,
+		&nodeNameSnapshot,
 		&result.AccountKey,
 		&result.FileName,
 		&result.DisplayAccount,
@@ -433,6 +489,8 @@ func scanResult(row scanner) (model.CodexInspectionResult, error) {
 	); err != nil {
 		return model.CodexInspectionResult{}, err
 	}
+	result.NodeID = nodeID.String
+	result.NodeNameSnapshot = nodeNameSnapshot.String
 	result.AuthIndex = authIndex.String
 	result.AccountID = accountID.String
 	result.Provider = provider.String

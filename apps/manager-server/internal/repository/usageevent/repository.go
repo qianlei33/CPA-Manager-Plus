@@ -23,6 +23,7 @@ type Repository interface {
 	AggregateWithFilter(ctx context.Context, filter AnalyticsFilter) (Aggregate, error)
 	ModelStatsWithFilter(ctx context.Context, filter AnalyticsFilter, limit int) ([]ModelStat, error)
 	TimelineWithFilter(ctx context.Context, filter AnalyticsFilter, granularity string) ([]TimelinePoint, error)
+	BucketTimelineWithFilter(ctx context.Context, filter AnalyticsFilter, bucketMs int64) ([]TimelinePoint, error)
 	HourlyDistributionWithFilter(ctx context.Context, filter AnalyticsFilter) ([]HourlyPoint, error)
 	ChannelModelStatsWithFilter(ctx context.Context, filter AnalyticsFilter) ([]ChannelModelStat, error)
 	FailureSourcesWithFilter(ctx context.Context, filter AnalyticsFilter) ([]FailureSourceStat, error)
@@ -57,13 +58,13 @@ func (r *repository) InsertBatch(ctx context.Context, events []model.UsageEvent)
 	}()
 
 	stmt, err := tx.PrepareContext(ctx, `insert or ignore into usage_events (
-		request_id, event_hash, timestamp_ms, timestamp, provider, executor_type, model, endpoint, method, path,
+		node_id, node_name_snapshot, request_id, event_hash, timestamp_ms, timestamp, provider, executor_type, model, endpoint, method, path,
 		auth_type, auth_index, source, source_hash, api_key_hash,
 		account_snapshot, auth_label_snapshot, auth_file_snapshot, auth_provider_snapshot, auth_project_id_snapshot, auth_snapshot_at_ms,
 		requested_model, resolved_model, reasoning_effort, service_tier,
 		input_tokens, output_tokens, reasoning_tokens, cached_tokens, cache_tokens, cache_read_tokens, cache_creation_tokens, total_tokens,
 		latency_ms, ttft_ms, failed, fail_status_code, fail_summary, fail_body, raw_json, created_at_ms
-	) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return model.InsertResult{}, err
 	}
@@ -83,6 +84,8 @@ func (r *repository) InsertBatch(ctx context.Context, events []model.UsageEvent)
 		rawJSON := usage.SafeRawJSON(event.RawJSON)
 		res, err := stmt.ExecContext(
 			ctx,
+			nullString(event.NodeID),
+			nullString(event.NodeNameSnapshot),
 			nullString(event.RequestID),
 			event.EventHash,
 			event.TimestampMS,
@@ -146,7 +149,7 @@ func (r *repository) ListRecent(ctx context.Context, limit int) ([]model.UsageEv
 		limit = 50000
 	}
 	rows, err := r.db.QueryContext(ctx, `select
-		request_id, event_hash, timestamp_ms, timestamp, provider, executor_type, model, endpoint, method, path,
+		node_id, node_name_snapshot, request_id, event_hash, timestamp_ms, timestamp, provider, executor_type, model, endpoint, method, path,
 		auth_type, auth_index, source, source_hash, api_key_hash,
 		account_snapshot, auth_label_snapshot, auth_file_snapshot, auth_provider_snapshot, auth_project_id_snapshot, auth_snapshot_at_ms,
 		requested_model, resolved_model, reasoning_effort, service_tier,
@@ -163,12 +166,14 @@ func (r *repository) ListRecent(ctx context.Context, limit int) ([]model.UsageEv
 	events := make([]model.UsageEvent, 0)
 	for rows.Next() {
 		var event model.UsageEvent
-		var requestID, provider, executorType, endpoint, method, path, authType, authIndex, source, sourceHash, apiKeyHash, accountSnapshot, authLabelSnapshot, authFileSnapshot, authProviderSnapshot, authProjectIDSnapshot, requestedModel, resolvedModel, reasoningEffort, serviceTier, failSummary sql.NullString
+		var nodeID, nodeNameSnapshot, requestID, provider, executorType, endpoint, method, path, authType, authIndex, source, sourceHash, apiKeyHash, accountSnapshot, authLabelSnapshot, authFileSnapshot, authProviderSnapshot, authProjectIDSnapshot, requestedModel, resolvedModel, reasoningEffort, serviceTier, failSummary sql.NullString
 		var authSnapshotAt sql.NullInt64
 		var latency, ttft sql.NullInt64
 		var failStatusCode sql.NullInt64
 		var failed int
 		if err := rows.Scan(
+			&nodeID,
+			&nodeNameSnapshot,
 			&requestID,
 			&event.EventHash,
 			&event.TimestampMS,
@@ -211,6 +216,8 @@ func (r *repository) ListRecent(ctx context.Context, limit int) ([]model.UsageEv
 		); err != nil {
 			return nil, err
 		}
+		event.NodeID = nodeID.String
+		event.NodeNameSnapshot = nodeNameSnapshot.String
 		event.RequestID = requestID.String
 		event.Provider = provider.String
 		event.ExecutorType = executorType.String

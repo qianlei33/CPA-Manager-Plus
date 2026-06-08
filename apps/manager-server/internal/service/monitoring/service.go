@@ -26,6 +26,7 @@ func New(store *store.Store) *Service {
 }
 
 type Request struct {
+	NodeID           string  `json:"nodeId"`
 	FromMS           int64   `json:"from_ms"`
 	ToMS             int64   `json:"to_ms"`
 	NowMS            int64   `json:"now_ms"`
@@ -505,6 +506,7 @@ func buildFilter(req Request) store.AnalyticsFilter {
 		includeFailed = *req.Filters.IncludeFailed
 	}
 	return store.AnalyticsFilter{
+		NodeID:            req.NodeID,
 		FromMS:            req.FromMS,
 		ToMS:              req.ToMS,
 		SearchQuery:       req.SearchQuery,

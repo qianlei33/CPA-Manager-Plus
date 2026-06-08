@@ -9,7 +9,7 @@ import {
   IconSatellite,
   IconSettings,
 } from '@/components/ui/icons';
-import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
+import { useAuthStore, useConfigStore, useCPANodeStore, useModelsStore } from '@/stores';
 import { apiKeysApi, providersApi, authFilesApi } from '@/services/api';
 import { logsApi, type ErrorLogFile } from '@/services/api/logs';
 import {
@@ -63,6 +63,7 @@ export function DashboardPage() {
   const serverBuildDate = useAuthStore((state) => state.serverBuildDate);
   const apiBase = useAuthStore((state) => state.apiBase);
   const managementKey = useAuthStore((state) => state.managementKey);
+  const nodes = useCPANodeStore((state) => state.nodes);
   const config = useConfigStore((state) => state.config);
   const usageSummary = useDashboardUsageSummary();
   const refreshUsageSummary = usageSummary.refresh;
@@ -475,6 +476,28 @@ export function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {nodes.length === 0 && (
+        <section
+          style={{
+            display: 'grid',
+            gap: 12,
+            padding: 24,
+            marginBottom: 20,
+            borderRadius: 18,
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-surface)',
+          }}
+        >
+          <h2 style={{ margin: 0 }}>请先添加 CPA 节点</h2>
+          <p style={{ margin: 0 }}>
+            当前管理端还没有可用 CPA 节点。添加节点后，右上角可以切换当前节点，页面数据和操作都会跟随当前节点。
+          </p>
+          <Link to="/cpa-nodes" className={styles.actionBtn} style={{ width: 'fit-content' }}>
+            添加 CPA 节点
+          </Link>
+        </section>
+      )}
 
       {/* 2. Top Overview Row (Version & Health) */}
       <section className={styles.overviewRow}>

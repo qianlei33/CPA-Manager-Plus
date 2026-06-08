@@ -5,9 +5,11 @@ import (
 	"strings"
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/app"
+	admintokencontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/admintoken"
 	apikeyaliascontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/apikeyalias"
 	authrefreshcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/authrefresh"
 	codexinspectioncontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/codexinspection"
+	cpanodecontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/cpanode"
 	dashboardcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/dashboard"
 	healthcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/health"
 	managerconfigcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/managerconfig"
@@ -15,7 +17,6 @@ import (
 	monitoringcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/monitoring"
 	panelcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/panel"
 	proxycontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/proxy"
-	setupcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/setup"
 	systemcontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/system"
 	usagecontroller "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/controller/usage"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/middleware"
@@ -25,12 +26,13 @@ import (
 func New(appCtx *app.Context) http.Handler {
 	healthHandler := &healthcontroller.Handler{ServiceID: appCtx.ServiceID}
 	systemHandler := &systemcontroller.Handler{App: appCtx}
-	setupHandler := &setupcontroller.Handler{App: appCtx}
 	managerConfigHandler := &managerconfigcontroller.Handler{App: appCtx}
+	adminTokenHandler := &admintokencontroller.Handler{App: appCtx}
 	usageHandler := &usagecontroller.Handler{App: appCtx}
 	modelPriceHandler := &modelpricecontroller.Handler{App: appCtx}
 	apiKeyAliasHandler := &apikeyaliascontroller.Handler{App: appCtx}
 	authRefreshHandler := &authrefreshcontroller.Handler{App: appCtx}
+	cpaNodeHandler := &cpanodecontroller.Handler{App: appCtx}
 	codexInspectionHandler := &codexinspectioncontroller.Handler{App: appCtx}
 	dashboardHandler := &dashboardcontroller.Handler{App: appCtx}
 	monitoringHandler := &monitoringcontroller.Handler{App: appCtx}
@@ -42,9 +44,8 @@ func New(appCtx *app.Context) http.Handler {
 	mux.HandleFunc("/status", middleware.WithCORS(appCtx.Config, systemHandler.Status))
 	mux.HandleFunc("/usage-service/info", middleware.WithCORS(appCtx.Config, systemHandler.Info))
 	mux.HandleFunc("/usage-service/config", middleware.WithCORS(appCtx.Config, managerConfigHandler.Handle))
-	mux.HandleFunc("/setup", middleware.WithCORS(appCtx.Config, setupHandler.Setup))
 	mux.HandleFunc("/management.html", panelHandler.ManagementHTML)
-	mux.HandleFunc("/", rootHandler(appCtx, usageHandler, modelPriceHandler, apiKeyAliasHandler, authRefreshHandler, codexInspectionHandler, dashboardHandler, monitoringHandler, proxyHandler))
+	mux.HandleFunc("/", rootHandler(appCtx, usageHandler, modelPriceHandler, apiKeyAliasHandler, authRefreshHandler, cpaNodeHandler, codexInspectionHandler, dashboardHandler, monitoringHandler, adminTokenHandler, proxyHandler))
 
 	return middleware.Recovery(middleware.RequestLogger(mux))
 }
@@ -55,9 +56,11 @@ func rootHandler(
 	modelPriceHandler *modelpricecontroller.Handler,
 	apiKeyAliasHandler *apikeyaliascontroller.Handler,
 	authRefreshHandler *authrefreshcontroller.Handler,
+	cpaNodeHandler *cpanodecontroller.Handler,
 	codexInspectionHandler *codexinspectioncontroller.Handler,
 	dashboardHandler *dashboardcontroller.Handler,
 	monitoringHandler *monitoringcontroller.Handler,
+	adminTokenHandler *admintokencontroller.Handler,
 	proxyHandler *proxycontroller.Handler,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -78,6 +81,10 @@ func rootHandler(
 			middleware.WithCORS(appCtx.Config, authRefreshHandler.Handle)(w, r)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/v0/management/cpa-nodes") {
+			middleware.WithCORS(appCtx.Config, cpaNodeHandler.Handle)(w, r)
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/v0/management/codex-inspection") {
 			middleware.WithCORS(appCtx.Config, codexInspectionHandler.Handle)(w, r)
 			return
@@ -88,6 +95,10 @@ func rootHandler(
 		}
 		if strings.HasPrefix(r.URL.Path, "/v0/management/monitoring/") {
 			middleware.WithCORS(appCtx.Config, monitoringHandler.Handle)(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/v0/management/admin-token") {
+			middleware.WithCORS(appCtx.Config, adminTokenHandler.Handle)(w, r)
 			return
 		}
 		cleanUsagePath := strings.TrimRight(r.URL.Path, "/")

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/app"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/middleware"
@@ -17,7 +18,8 @@ type Handler struct {
 }
 
 type refreshRequest struct {
-	Names []string `json:"names"`
+	NodeID string   `json:"nodeId"`
+	Names  []string `json:"names"`
 }
 
 type refreshResponse struct {
@@ -46,11 +48,29 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := h.App.AuthRefreshService.RefreshTokens(r.Context(), req.Names)
+	nodeID := req.NodeID
+	if nodeID == "" {
+		nodeID = r.URL.Query().Get("nodeId")
+	}
+	results, err := h.App.AuthRefreshService.RefreshTokens(r.Context(), nodeID, req.Names)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err)
+		response.Error(w, authRefreshErrorStatus(err), err)
 		return
 	}
 
 	response.JSON(w, http.StatusOK, refreshResponse{Results: results})
+}
+
+func authRefreshErrorStatus(err error) int {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "nodeId is required"):
+		return http.StatusBadRequest
+	case strings.Contains(message, "not found"):
+		return http.StatusNotFound
+	case strings.Contains(message, "disabled"), strings.Contains(message, "no valid file names"):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
 }

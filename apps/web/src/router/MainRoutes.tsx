@@ -24,6 +24,8 @@ import { ServerCodexInspectionPage } from '@/pages/ServerCodexInspectionPage';
 import { ConfigPage } from '@/pages/ConfigPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
+import { CPANodesPage } from '@/pages/CPANodesPage';
+import { PlusSettingsPage } from '@/pages/PlusSettingsPage';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { CodexInspectionModeTabs } from '@/features/monitoring/components/CodexInspectionModeTabs';
 import { usePanelFeatureAvailability } from '@/hooks/usePanelFeatureAvailability';
@@ -225,6 +227,8 @@ const mainRoutes = [
     ),
   },
   { path: '/config', element: <ConfigPage /> },
+  { path: '/cpa-nodes', element: <CPANodesPage /> },
+  { path: '/plus-settings', element: <PlusSettingsPage /> },
   {
     path: '/logs',
     element: (

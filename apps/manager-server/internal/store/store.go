@@ -7,6 +7,7 @@ import (
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/model"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/apikeyalias"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/codexinspection"
+	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/cpanode"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/deadletter"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/modelprice"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/setting"
@@ -32,6 +33,7 @@ type InsertResult = model.InsertResult
 type ModelPrice = model.ModelPrice
 type ModelPriceSyncResult = model.ModelPriceSyncResult
 type APIKeyAlias = model.APIKeyAlias
+type CPANode = model.CPANode
 
 var DefaultCodexInspectionConfig = model.DefaultCodexInspectionConfig
 var NormalizeCodexInspectionConfig = model.NormalizeCodexInspectionConfig
@@ -59,6 +61,7 @@ type Store struct {
 	DeadLetters      deadletter.Repository
 	ModelPrices      modelprice.Repository
 	APIKeyAliases    apikeyalias.Repository
+	CPANodes         cpanode.Repository
 	CodexInspections codexinspection.Repository
 }
 
@@ -78,6 +81,7 @@ func New(db *sql.DB, protector ...*security.Protector) *Store {
 		DeadLetters:      deadletter.New(db),
 		ModelPrices:      modelprice.New(db),
 		APIKeyAliases:    apikeyalias.New(db),
+		CPANodes:         cpanode.New(db, protector...),
 		CodexInspections: codexinspection.New(db),
 	}
 }
@@ -173,12 +177,20 @@ func (s *Store) ListCodexInspectionRuns(ctx context.Context, limit int) ([]Codex
 	return s.CodexInspections.ListRuns(ctx, limit)
 }
 
+func (s *Store) ListCodexInspectionRunsForNode(ctx context.Context, nodeID string, limit int) ([]CodexInspectionRun, error) {
+	return s.CodexInspections.ListRunsForNode(ctx, nodeID, limit)
+}
+
 func (s *Store) GetCodexInspectionRun(ctx context.Context, id int64) (CodexInspectionRun, bool, error) {
 	return s.CodexInspections.GetRun(ctx, id)
 }
 
 func (s *Store) GetLatestCodexInspectionRunByTrigger(ctx context.Context, triggerType, triggerKey string) (CodexInspectionRun, bool, error) {
 	return s.CodexInspections.GetLatestRunByTrigger(ctx, triggerType, triggerKey)
+}
+
+func (s *Store) GetLatestCodexInspectionRunByNodeAndTrigger(ctx context.Context, nodeID, triggerType, triggerKey string) (CodexInspectionRun, bool, error) {
+	return s.CodexInspections.GetLatestRunByNodeAndTrigger(ctx, nodeID, triggerType, triggerKey)
 }
 
 func (s *Store) ListCodexInspectionResults(ctx context.Context, runID int64) ([]CodexInspectionResult, error) {
@@ -195,6 +207,10 @@ func (s *Store) InsertEvents(ctx context.Context, events []usage.Event) (InsertR
 
 func (s *Store) AddDeadLetter(ctx context.Context, payload string, parseErr error) error {
 	return s.DeadLetters.Insert(ctx, payload, parseErr.Error())
+}
+
+func (s *Store) AddDeadLetterWithNode(ctx context.Context, payload string, parseErr error, nodeID string, nodeName string) error {
+	return s.DeadLetters.InsertWithNode(ctx, payload, parseErr.Error(), nodeID, nodeName)
 }
 
 func (s *Store) RecentEvents(ctx context.Context, limit int) ([]usage.Event, error) {
@@ -255,6 +271,10 @@ func (s *Store) ModelStatsWithFilter(ctx context.Context, filter AnalyticsFilter
 
 func (s *Store) TimelineWithFilter(ctx context.Context, filter AnalyticsFilter, granularity string) ([]TimelinePoint, error) {
 	return s.UsageEvents.TimelineWithFilter(ctx, filter, granularity)
+}
+
+func (s *Store) BucketTimelineWithFilter(ctx context.Context, filter AnalyticsFilter, bucketMs int64) ([]TimelinePoint, error) {
+	return s.UsageEvents.BucketTimelineWithFilter(ctx, filter, bucketMs)
 }
 
 func (s *Store) HourlyDistributionWithFilter(ctx context.Context, filter AnalyticsFilter) ([]HourlyPoint, error) {

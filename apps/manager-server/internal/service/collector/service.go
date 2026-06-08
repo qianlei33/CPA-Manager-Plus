@@ -46,6 +46,8 @@ func (s *Service) Status() collectorpkg.Status {
 
 func RuntimeConfigFromManagerConfig(cfg store.ManagerConfig) collectorpkg.RuntimeConfig {
 	return collectorpkg.RuntimeConfig{
+		NodeID:         "",
+		NodeName:       "",
 		CPAUpstreamURL: cfg.CPAConnection.CPABaseURL,
 		ManagementKey:  cfg.CPAConnection.ManagementKey,
 		CollectorMode:  cfg.Collector.CollectorMode,
@@ -67,6 +69,8 @@ func RuntimeConfigFromManagerConfigWithFallback(managerCfg store.ManagerConfig, 
 		batchSize = base.BatchSize
 	}
 	return collectorpkg.RuntimeConfig{
+		NodeID:         "",
+		NodeName:       "",
 		CPAUpstreamURL: managerCfg.CPAConnection.CPABaseURL,
 		ManagementKey:  managerCfg.CPAConnection.ManagementKey,
 		CollectorMode:  valueOr(managerCfg.Collector.CollectorMode, base.CollectorMode),

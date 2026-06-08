@@ -146,7 +146,7 @@ func TestInfoReportsConfiguredState(t *testing.T) {
 		configured bool
 	}{
 		{name: "not configured", saveSetup: false, configured: false},
-		{name: "configured", saveSetup: true, configured: true},
+		{name: "legacy setup does not configure nodes", saveSetup: true, configured: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			handler := newTestHandler(t, "http://example.test", tc.saveSetup)
@@ -270,6 +270,7 @@ func TestModelListProxyRequiresSetup(t *testing.T) {
 }
 
 func TestSetupRejectsDifferentUpstreamWithoutExistingAuthorization(t *testing.T) {
+	t.Skip("legacy /setup route was removed; CPA connections are created via /v0/management/cpa-nodes")
 	currentUpstream := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(currentUpstream.Close)
 
@@ -305,6 +306,7 @@ func TestSetupRejectsDifferentUpstreamWithoutExistingAuthorization(t *testing.T)
 }
 
 func TestSetupAllowsKeyRotationForSameUpstreamWithValidNewKey(t *testing.T) {
+	t.Skip("legacy /setup route was removed; CPA connections are created via /v0/management/cpa-nodes")
 	observed := make(chan observedRequest, 10)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v0/management/config" {
@@ -362,6 +364,7 @@ func TestSetupAllowsKeyRotationForSameUpstreamWithValidNewKey(t *testing.T) {
 }
 
 func TestSetupRejectsKeyRotationWhenSetupIsEnvironmentManaged(t *testing.T) {
+	t.Skip("legacy /setup route was removed; CPA connections are created via /v0/management/cpa-nodes")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v0/management/config" && r.Header.Get("Authorization") == "Bearer rotated-key" {
 			w.Header().Set("Content-Type", "application/json")
@@ -479,6 +482,7 @@ func TestManagerConfigReadsLegacySetup(t *testing.T) {
 }
 
 func TestSetupCanDisableRequestMonitoring(t *testing.T) {
+	t.Skip("legacy /setup route was removed; CPA connections are created via /v0/management/cpa-nodes")
 	configCalls := 0
 	enableCalls := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

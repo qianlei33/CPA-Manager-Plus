@@ -114,6 +114,7 @@ func TestServerCompatPanelPathOverridesEmbeddedPanel(t *testing.T) {
 }
 
 func TestServerCompatSetupConfigAndEnvLock(t *testing.T) {
+	t.Skip("legacy /setup route was removed; CPA connections are created via /v0/management/cpa-nodes")
 	cpa := testutil.NewCPAMock(t)
 	cfg := testutil.NewConfig(t)
 	handler, db := newCompatHandler(t, cfg, nil)
@@ -223,7 +224,7 @@ func TestServerCompatInfoIgnoresStaleUninitializedBootstrapState(t *testing.T) {
 		SetupRequired      bool `json:"setupRequired"`
 	}
 	testutil.DecodeJSON(t, infoRR, &info)
-	if !info.Configured || !info.ProjectInitialized || info.SetupRequired {
+	if info.Configured || !info.ProjectInitialized || info.SetupRequired {
 		t.Fatalf("info response = %#v", info)
 	}
 }

@@ -13,6 +13,8 @@ import (
 )
 
 type Event struct {
+	NodeID                string `json:"node_id,omitempty"`
+	NodeNameSnapshot      string `json:"node_name_snapshot,omitempty"`
 	RequestID             string `json:"request_id,omitempty"`
 	EventHash             string `json:"event_hash"`
 	TimestampMS           int64  `json:"timestamp_ms"`
@@ -72,6 +74,8 @@ type Tokens struct {
 }
 
 type Detail struct {
+	NodeID                string `json:"node_id,omitempty"`
+	NodeNameSnapshot      string `json:"node_name_snapshot,omitempty"`
 	Timestamp             string `json:"timestamp"`
 	Source                string `json:"source"`
 	AuthIndex             string `json:"auth_index,omitempty"`
@@ -290,6 +294,8 @@ func BuildPayload(events []Event) Payload {
 			event.CacheCreationTokens,
 		)
 		modelEntry.Details = append(modelEntry.Details, Detail{
+			NodeID:                event.NodeID,
+			NodeNameSnapshot:      event.NodeNameSnapshot,
 			Timestamp:             event.Timestamp,
 			Source:                event.Source,
 			AuthIndex:             event.AuthIndex,

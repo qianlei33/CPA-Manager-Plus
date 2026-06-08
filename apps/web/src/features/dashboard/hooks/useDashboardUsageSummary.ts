@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRequestMonitoringAvailability } from '@/hooks/useRequestMonitoringAvailability';
 import { dashboardApi, type DashboardSummaryResponse } from '@/services/api/usageService';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useCPANodeStore } from '@/stores';
 
 const REFRESH_INTERVAL_MS = 60_000;
 
@@ -32,6 +32,7 @@ export interface UseDashboardUsageSummaryReturn {
 
 export function useDashboardUsageSummary(): UseDashboardUsageSummaryReturn {
   const managementKey = useAuthStore((state) => state.managementKey);
+  const currentNodeId = useCPANodeStore((state) => state.currentNodeId);
   const availability = useRequestMonitoringAvailability();
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +58,7 @@ export function useDashboardUsageSummary(): UseDashboardUsageSummaryReturn {
 
     try {
       const response = await dashboardApi.getSummary(serviceBase, managementKey, {
+        nodeId: currentNodeId,
         todayStartMs: getTodayStartMs(),
         nowMs: Date.now(),
         topModels: 5,
@@ -74,7 +76,7 @@ export function useDashboardUsageSummary(): UseDashboardUsageSummaryReturn {
         setLoading(false);
       }
     }
-  }, [enabled, managementKey, serviceBase]);
+  }, [currentNodeId, enabled, managementKey, serviceBase]);
 
   useEffect(() => {
     if (availability.checking) {

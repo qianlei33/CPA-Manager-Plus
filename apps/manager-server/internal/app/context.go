@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"io/fs"
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/collector"
@@ -11,6 +12,7 @@ import (
 	bootstrapsvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/bootstrap"
 	codexinspectionsvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/codexinspection"
 	collectorsvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/collector"
+	cpanodesvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/cpanode"
 	dashboardsvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/dashboard"
 	managerconfigsvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/managerconfig"
 	modelpricesvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/modelprice"
@@ -35,6 +37,7 @@ type Context struct {
 	AdminAuthService       *adminauthsvc.Service
 	ManagerConfigService   *managerconfigsvc.Service
 	CollectorService       *collectorsvc.Service
+	CPANodeService         *cpanodesvc.Service
 	UsageService           *usagesvc.Service
 	DashboardService       *dashboardsvc.Service
 	CodexInspectionService *codexinspectionsvc.Service
@@ -44,6 +47,12 @@ type Context struct {
 	AuthRefreshService     *authrefreshsvc.Service
 	ProxyService           *proxysvc.Service
 	PanelService           *panelsvc.Service
+	CollectorReloader      CollectorReloader
+}
+
+// CollectorReloader reloads node-scoped collectors after CPA node changes.
+type CollectorReloader interface {
+	ReloadNodes(ctx context.Context) error
 }
 
 func FromExisting(
@@ -58,6 +67,7 @@ func FromExisting(
 ) *Context {
 	collectorService := collectorsvc.New(collectorManager)
 	managerConfigService := managerconfigsvc.New(cfg, st, collectorService)
+	cpaNodeService := cpanodesvc.New(st)
 	return &Context{
 		Config:                 cfg,
 		Store:                  st,
@@ -68,14 +78,15 @@ func FromExisting(
 		SetupService:           setupsvc.New(cfg, st, collectorService, managerConfigService, startedAt, serviceID),
 		ManagerConfigService:   managerConfigService,
 		CollectorService:       collectorService,
+		CPANodeService:         cpaNodeService,
 		UsageService:           usagesvc.New(st),
 		DashboardService:       dashboardsvc.New(st),
-		CodexInspectionService: codexinspectionsvc.New(st, managerConfigService),
+		CodexInspectionService: codexinspectionsvc.New(st, managerConfigService, cpaNodeService),
 		MonitoringService:      monitoringsvc.New(st),
 		ModelPriceService:      modelpricesvc.NewMultiSource(st, modelPriceSyncURL, openRouterModelPriceSyncURL, managerConfigService),
 		APIKeyAliasService:     apikeyaliassvc.New(st),
-		AuthRefreshService:     authrefreshsvc.New(managerConfigService),
-		ProxyService:           proxysvc.New(managerConfigService),
+		AuthRefreshService:     authrefreshsvc.New(managerConfigService, cpaNodeService),
+		ProxyService:           proxysvc.New(managerConfigService, cpaNodeService),
 		PanelService:           panelsvc.New(cfg.PanelPath, embeddedPanel),
 	}
 }

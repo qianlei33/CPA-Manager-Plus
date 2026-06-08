@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   isUsageServiceId,
   normalizeUsageServiceBase,
+  cpaNodeApi,
   usageServiceApi,
   type ManagerConfig,
 } from '@/services/api/usageService';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useCPANodeStore } from '@/stores';
 import { detectApiBaseFromLocation } from '@/utils/connection';
 
 export type PanelHostMode = 'manager_embedded' | 'external_panel';
@@ -36,6 +37,8 @@ export interface ResolvePanelFeatureAvailabilityInput {
   panelBase: string;
   managerServiceBase: string;
   managerConfig: ManagerConfig | null;
+  hasConfiguredNodes?: boolean;
+  hasRequestMonitoringNode?: boolean;
   hasManagerCandidate: boolean;
   managementKey: string;
 }
@@ -77,12 +80,8 @@ export function resolvePanelFeatureAvailability(
     );
   }
 
-  const hasCPAConnection = Boolean(
-    input.managerConfig.cpaConnection?.cpaBaseUrl &&
-      input.managerConfig.cpaConnection?.managementKey
-  );
-  const collectorEnabled = input.managerConfig.collector?.enabled !== false;
-  const requestMonitoringAvailable = hasCPAConnection && collectorEnabled;
+  const hasNodeConnection = input.hasConfiguredNodes === true;
+  const requestMonitoringAvailable = input.hasRequestMonitoringNode === true;
 
   return {
     checking: input.checking === true,
@@ -97,7 +96,7 @@ export function resolvePanelFeatureAvailability(
     externalManagerConfigAvailable: false,
     reason: requestMonitoringAvailable
       ? ''
-      : !hasCPAConnection
+      : !hasNodeConnection
         ? 'service_not_configured'
         : 'monitoring_disabled',
   };
@@ -133,7 +132,7 @@ export function managerConfigMatchesPanel({
 type PanelFeatureAvailabilityRequestInput = {
   apiBase: string;
   managementKey: string;
-  usageServiceRevision: number;
+  usageServiceRevision: number | string;
   panelBase: string;
 };
 
@@ -210,6 +209,10 @@ async function detectPanelFeatureAvailability({
       const info = await usageServiceApi.getInfo(candidate);
       if (!isUsageServiceId(info.service)) continue;
       const response = await usageServiceApi.getManagerConfig(candidate, managementKey);
+      const nodes = await cpaNodeApi.list(candidate, managementKey);
+      const hasRequestMonitoringNode = nodes.some(
+        (node) => node.enabled && node.collectorEnabled !== false
+      );
       if (
         !managerConfigMatchesPanel({
           panelHostedByUsageService,
@@ -225,6 +228,8 @@ async function detectPanelFeatureAvailability({
         panelBase: normalizedPanelBase,
         managerServiceBase: candidate,
         managerConfig: response.config,
+        hasConfiguredNodes: info.configured === true,
+        hasRequestMonitoringNode,
         hasManagerCandidate: candidates.length > 0,
         managementKey,
       });
@@ -276,15 +281,20 @@ function requestPanelFeatureAvailability(
 export function usePanelFeatureAvailability(): PanelFeatureAvailability {
   const apiBase = useAuthStore((state) => state.apiBase);
   const managementKey = useAuthStore((state) => state.managementKey);
+  const nodes = useCPANodeStore((state) => state.nodes);
   const panelBase = useMemo(() => detectApiBaseFromLocation(), []);
+  const nodeRevision = useMemo(
+    () => nodes.map((node) => `${node.id}:${node.enabled}:${node.collectorEnabled !== false}`).join('|'),
+    [nodes]
+  );
   const requestInput = useMemo(
     () => ({
       apiBase,
       managementKey,
-      usageServiceRevision: 0,
+      usageServiceRevision: nodeRevision,
       panelBase,
     }),
-    [apiBase, managementKey, panelBase]
+    [apiBase, managementKey, nodeRevision, panelBase]
   );
   const requestKey = useMemo(
     () => buildAvailabilityRequestKey(requestInput),

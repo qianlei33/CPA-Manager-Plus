@@ -180,7 +180,7 @@ export function ConfigPage() {
 
   const [activeTab, setActiveTab] = useState<ConfigEditorTab>(() => {
     const saved = localStorage.getItem(CONFIG_TAB_STORAGE_KEY);
-    if (saved === 'visual' || saved === 'source' || saved === 'manager') return saved;
+    if (saved === 'visual' || saved === 'source') return saved;
     return 'visual';
   });
 
@@ -229,7 +229,7 @@ export function ConfigPage() {
   const floatingActionsRef = useRef<HTMLDivElement>(null);
 
   const disableControls = connectionStatus !== 'connected';
-  const showManagerTab = panelHostedByUsageService === true;
+  const showManagerTab = false;
   const isManagerTab = activeTab === 'manager' && showManagerTab;
   const sourceDirty = dirty || visualDirty;
   const shouldRenderFloatingActions = isCurrentLayer;
@@ -330,10 +330,10 @@ export function ConfigPage() {
   }, [detectedPanelBase]);
 
   useEffect(() => {
-    if (panelHostedByUsageService !== false || activeTab !== 'manager') return;
+    if (activeTab !== 'manager') return;
     setActiveTab('visual');
     localStorage.setItem(CONFIG_TAB_STORAGE_KEY, 'visual');
-  }, [activeTab, panelHostedByUsageService]);
+  }, [activeTab]);
 
   const resolveManagerServiceBase = useCallback(() => {
     if (panelHostedByUsageService) {

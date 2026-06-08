@@ -12,6 +12,20 @@ import {
 } from '@/utils/constants';
 import { computeApiUrl } from '@/utils/connection';
 
+const CURRENT_NODE_STORAGE_KEY = 'cpa-manager-plus-current-node';
+
+const readCurrentNodeId = (): string => {
+  try {
+    const raw = localStorage.getItem(CURRENT_NODE_STORAGE_KEY);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw) as { state?: { currentNodeId?: unknown } };
+    const value = parsed.state?.currentNodeId;
+    return typeof value === 'string' ? value : '';
+  } catch {
+    return '';
+  }
+};
+
 class ApiClient {
   private instance: AxiosInstance;
   private apiBase: string = '';
@@ -98,6 +112,11 @@ class ApiClient {
         // 添加认证头
         if (this.managementKey) {
           config.headers.Authorization = `Bearer ${this.managementKey}`;
+        }
+
+        const currentNodeId = readCurrentNodeId();
+        if (currentNodeId) {
+          config.headers['X-CPA-Node-ID'] = currentNodeId;
         }
 
         return config;

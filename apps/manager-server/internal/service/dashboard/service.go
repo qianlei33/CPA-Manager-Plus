@@ -30,6 +30,7 @@ func New(store *store.Store) *Service {
 }
 
 type SummaryParams struct {
+	NodeID         string
 	TodayStartMS   int64
 	NowMS          int64
 	TopModels      int
@@ -219,24 +220,27 @@ func (s *Service) Summary(ctx context.Context, p SummaryParams) (SummaryResponse
 		recentLimit = defaultRecentFailures
 	}
 
-	todayAgg, err := s.store.AggregateBetween(ctx, p.TodayStartMS, nowMS)
+	filter := store.AnalyticsFilter{NodeID: p.NodeID, FromMS: p.TodayStartMS, ToMS: nowMS, IncludeFailed: true}
+	todayAgg, err := s.store.AggregateWithFilter(ctx, filter)
 	if err != nil {
 		return SummaryResponse{}, err
 	}
 	rollingStartMS := nowMS - rollingWindowMs
-	rollingAgg, err := s.store.AggregateBetween(ctx, rollingStartMS, nowMS)
+	rollingFilter := filter
+	rollingFilter.FromMS = rollingStartMS
+	rollingAgg, err := s.store.AggregateWithFilter(ctx, rollingFilter)
 	if err != nil {
 		return SummaryResponse{}, err
 	}
-	modelStats, err := s.store.ModelStatsBetween(ctx, p.TodayStartMS, nowMS)
+	modelStats, err := s.store.ModelStatsWithFilter(ctx, filter, 0)
 	if err != nil {
 		return SummaryResponse{}, err
 	}
-	topStats, err := s.store.TopModelsBetween(ctx, p.TodayStartMS, nowMS, topLimit)
+	topStats, err := s.store.ModelStatsWithFilter(ctx, filter, topLimit)
 	if err != nil {
 		return SummaryResponse{}, err
 	}
-	recentFailures, err := s.store.RecentFailuresBetween(ctx, p.TodayStartMS, nowMS, recentLimit)
+	recentFailures, err := s.store.RecentFailuresWithFilter(ctx, filter, recentLimit)
 	if err != nil {
 		return SummaryResponse{}, err
 	}
@@ -244,17 +248,12 @@ func (s *Service) Summary(ctx context.Context, p SummaryParams) (SummaryResponse
 	if err != nil {
 		return SummaryResponse{}, err
 	}
-	filter := store.AnalyticsFilter{
-		FromMS:        p.TodayStartMS,
-		ToMS:          nowMS,
-		IncludeFailed: true,
-	}
-	timeline, err := s.store.HourlyTimelineBetween(ctx, p.TodayStartMS, nowMS)
+	timeline, err := s.store.BucketTimelineWithFilter(ctx, filter, hourWindowMs)
 	if err != nil {
 		return SummaryResponse{}, err
 	}
 	healthTimelineToMS := p.TodayStartMS + int64(healthTimelineBuckets)*healthTimelineBucketMs
-	healthTimelinePoints, err := s.store.BucketTimelineBetween(ctx, p.TodayStartMS, nowMS, healthTimelineBucketMs)
+	healthTimelinePoints, err := s.store.BucketTimelineWithFilter(ctx, filter, healthTimelineBucketMs)
 	if err != nil {
 		return SummaryResponse{}, err
 	}

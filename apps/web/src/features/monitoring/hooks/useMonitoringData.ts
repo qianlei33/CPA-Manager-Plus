@@ -55,6 +55,7 @@ import type {
 } from '../model/types';
 import { loadMonitoringMetaPayload } from '../services/monitoringMetaService';
 import { useMonitoringAnalytics } from './useMonitoringAnalytics';
+import { useCPANodeStore } from '@/stores';
 
 export type {
   MonitoringAccountModelSpendRow,
@@ -168,6 +169,7 @@ const buildEventsPageKey = (
   ].join(':');
 
 export const buildMonitoringEventsScopeKey = (
+  nodeId: string,
   timeRange: UseMonitoringDataParams['timeRange'],
   analyticsBounds: { startMs: number; endMs: number } | null,
   searchQuery: string,
@@ -176,6 +178,7 @@ export const buildMonitoringEventsScopeKey = (
   granularity: string
 ) =>
   JSON.stringify({
+    nodeId,
     range: timeRange,
     bounds:
       timeRange === 'custom'
@@ -279,6 +282,7 @@ export function useMonitoringData({
   searchApiKeyHash,
   scopeFilters,
 }: UseMonitoringDataParams): UseMonitoringDataReturn {
+  const currentNodeId = useCPANodeStore((state) => state.currentNodeId);
   const [authFiles, setAuthFiles] = useState<AuthFileItem[]>([]);
   const [channels, setChannels] = useState<MonitoringChannelMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -407,6 +411,7 @@ export function useMonitoringData({
   const eventsScopeKey = useMemo(
     () =>
       buildMonitoringEventsScopeKey(
+        currentNodeId,
         timeRange,
         analyticsBounds,
         searchQuery,
@@ -418,6 +423,7 @@ export function useMonitoringData({
       analyticsBounds,
       analyticsFilters,
       analyticsGranularity,
+      currentNodeId,
       searchApiKeyHash,
       searchQuery,
       timeRange,

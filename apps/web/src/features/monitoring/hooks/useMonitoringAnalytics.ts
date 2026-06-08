@@ -11,7 +11,7 @@ import {
   type MonitoringAnalyticsRequest,
   type MonitoringAnalyticsResponse,
 } from '@/services/api/usageService';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useCPANodeStore } from '@/stores';
 
 const DEFAULT_REFRESH_THROTTLE_MS = 5_000;
 
@@ -64,6 +64,7 @@ export function useMonitoringAnalytics({
   throttleMs = DEFAULT_REFRESH_THROTTLE_MS,
 }: UseMonitoringAnalyticsParams): UseMonitoringAnalyticsReturn {
   const managementKey = useAuthStore((state) => state.managementKey);
+  const currentNodeId = useCPANodeStore((state) => state.currentNodeId);
   const availability = useRequestMonitoringAvailability();
   const [data, setData] = useState<MonitoringAnalyticsResponse | null>(null);
   const [dataScopeStateKey, setDataScopeStateKey] = useState('');
@@ -91,6 +92,7 @@ export function useMonitoringAnalytics({
     }
 
     const payload: MonitoringAnalyticsRequest = {
+      ...(currentNodeId ? { nodeId: currentNodeId } : {}),
       from_ms: fromMs,
       to_ms: toMs,
     };
@@ -115,7 +117,7 @@ export function useMonitoringAnalytics({
       payload.include = nextInclude;
     }
     return payload;
-  }, [eventsPageKey, filtersKey, fromMs, includeKey, nowMs, searchApiKeyHash, searchQuery, toMs]);
+  }, [currentNodeId, eventsPageKey, filtersKey, fromMs, includeKey, nowMs, searchApiKeyHash, searchQuery, toMs]);
 
   const requestKey = useMemo(() => (request ? stableJson(request) : ''), [request]);
   const activeDataScopeKey = dataScopeKey || requestKey;

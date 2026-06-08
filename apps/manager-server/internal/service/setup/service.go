@@ -67,30 +67,27 @@ func New(cfg config.Config, store *store.Store, collector *collectorservice.Serv
 }
 
 func (s *Service) Info(ctx context.Context) (InfoResult, error) {
-	setup, ok, err := s.managerConfigService.ResolveSetup(ctx)
-	if err != nil {
-		return InfoResult{}, err
-	}
 	_, adminReady, err := s.store.LoadAdminCredential(ctx)
 	if err != nil {
 		return InfoResult{}, err
 	}
-	bootstrapState, bootstrapStateOK, err := s.store.LoadBootstrapState(ctx)
+	bootstrapState, _, err := s.store.LoadBootstrapState(ctx)
 	if err != nil {
 		return InfoResult{}, err
 	}
-	projectInitialized := ok && setup.CPAUpstreamURL != "" && setup.ManagementKey != ""
-	if bootstrapStateOK && !projectInitialized {
-		projectInitialized = bootstrapState.ProjectInitialized
+	projectInitialized := adminReady
+	nodes, err := s.store.CPANodes.List(ctx)
+	if err != nil {
+		return InfoResult{}, err
 	}
 	return InfoResult{
 		Service:            s.serviceID,
 		Mode:               "embedded",
 		StartedAt:          s.startedAt,
-		Configured:         projectInitialized,
+		Configured:         len(nodes) > 0,
 		AdminReady:         adminReady,
 		ProjectInitialized: projectInitialized,
-		SetupRequired:      adminReady && !projectInitialized,
+		SetupRequired:      !adminReady,
 		MigrationStatus:    bootstrapState.Status,
 		DataKeyReady:       bootstrapState.DataKeyReady,
 		HasHistoricalData:  bootstrapState.HasHistoricalData,

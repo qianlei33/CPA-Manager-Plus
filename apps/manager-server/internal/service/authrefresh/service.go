@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/cpa"
+	cpanodesvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/cpanode"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/managerconfig"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/store"
 )
@@ -29,25 +30,27 @@ type RefreshResult struct {
 // Service 提供 Codex Token 强制刷新的业务能力。
 type Service struct {
 	managerConfigService *managerconfig.Service
+	cpaNodeService       *cpanodesvc.Service
 	client               *http.Client
 }
 
 // New 创建 Service 实例。
-func New(managerConfigService *managerconfig.Service, clients ...*http.Client) *Service {
+func New(managerConfigService *managerconfig.Service, cpaNodeService *cpanodesvc.Service, clients ...*http.Client) *Service {
 	client := &http.Client{Timeout: 30 * time.Second}
 	if len(clients) > 0 && clients[0] != nil {
 		client = clients[0]
 	}
 	return &Service{
 		managerConfigService: managerConfigService,
+		cpaNodeService:       cpaNodeService,
 		client:               client,
 	}
 }
 
 // RefreshTokens 对指定的 Codex 认证文件触发强制刷新，并轮询验证结果。
 // 内部实现：并发 PATCH expired → 等待 6 秒 → 再次拉取列表 → 对比 last_refresh 判定成败。
-func (s *Service) RefreshTokens(ctx context.Context, names []string) ([]RefreshResult, error) {
-	setup, err := s.resolveSetup(ctx)
+func (s *Service) RefreshTokens(ctx context.Context, nodeID string, names []string) ([]RefreshResult, error) {
+	setup, err := s.resolveSetup(ctx, nodeID)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +108,10 @@ func (s *Service) RefreshTokens(ctx context.Context, names []string) ([]RefreshR
 	return results, nil
 }
 
-func (s *Service) resolveSetup(ctx context.Context) (store.Setup, error) {
+func (s *Service) resolveSetup(ctx context.Context, nodeID string) (store.Setup, error) {
+	if s.cpaNodeService != nil {
+		return s.cpaNodeService.ResolveSetup(ctx, nodeID)
+	}
 	managerCfg, _, ok, err := s.managerConfigService.ResolveManagerConfigWithSource(ctx)
 	if err != nil {
 		return store.Setup{}, err

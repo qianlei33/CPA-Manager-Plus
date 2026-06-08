@@ -13,10 +13,10 @@ describe('resolveUsageServiceLoginMode', () => {
     });
   });
 
-  it('uses setup only for unconfigured Usage Service hosted panels', () => {
+  it('does not use setup for unconfigured Usage Service hosted panels', () => {
     expect(resolveUsageServiceLoginMode({ service: 'cpa-manager-plus', configured: false })).toEqual({
       hostedByUsageService: true,
-      usageServiceNeedsSetup: true,
+      usageServiceNeedsSetup: false,
     });
   });
 

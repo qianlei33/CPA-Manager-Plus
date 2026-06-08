@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type RefObj
 import { useTranslation } from 'react-i18next';
 import { authFilesApi, usageServiceApi } from '@/services/api';
 import { apiClient } from '@/services/api/client';
-import { useNotificationStore } from '@/stores';
+import { useCPANodeStore, useNotificationStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
 import { formatFileSize } from '@/utils/format';
 import { MAX_AUTH_FILE_SIZE } from '@/utils/constants';
@@ -95,6 +95,7 @@ export const buildPastedAuthJsonPayload = (
 export function useAuthFilesData(): UseAuthFilesDataResult {
   const { t } = useTranslation();
   const { showNotification, showConfirmation } = useNotificationStore();
+  const currentNodeId = useCPANodeStore((state) => state.currentNodeId);
 
   const [files, setFiles] = useState<AuthFileItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -749,7 +750,7 @@ export function useAuthFilesData(): UseAuthFilesDataResult {
         onConfirm: async () => {
           setRefreshing((prev) => ({ ...prev, [name]: true }));
           try {
-            const response = await usageServiceApi.refreshCodexTokens(base, key, [name]);
+            const response = await usageServiceApi.refreshCodexTokens(base, key, [name], currentNodeId);
             const result = response.results[0];
             if (result?.success) {
               showNotification(
@@ -775,7 +776,7 @@ export function useAuthFilesData(): UseAuthFilesDataResult {
         },
       });
     },
-    [refreshing, showConfirmation, showNotification, t]
+    [currentNodeId, refreshing, showConfirmation, showNotification, t]
   );
 
   const batchRefreshCodexToken = useCallback(
@@ -800,7 +801,7 @@ export function useAuthFilesData(): UseAuthFilesDataResult {
           });
 
           try {
-            const response = await usageServiceApi.refreshCodexTokens(base, key, uniqueNames);
+            const response = await usageServiceApi.refreshCodexTokens(base, key, uniqueNames, currentNodeId);
             let successCount = 0;
             let failCount = 0;
             response.results.forEach((result) => {
@@ -838,7 +839,7 @@ export function useAuthFilesData(): UseAuthFilesDataResult {
         },
       });
     },
-    [batchRefreshing, showConfirmation, showNotification, t]
+    [batchRefreshing, currentNodeId, showConfirmation, showNotification, t]
   );
 
   return {

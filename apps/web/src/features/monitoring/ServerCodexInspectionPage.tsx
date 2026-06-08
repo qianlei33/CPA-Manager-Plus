@@ -47,7 +47,7 @@ import {
   type ManagerCodexInspectionScheduleMode,
   type ManagerConfig,
 } from '@/services/api/usageService';
-import { useAuthStore, useNotificationStore } from '@/stores';
+import { useAuthStore, useCPANodeStore, useNotificationStore } from '@/stores';
 import styles from './CodexInspectionPage.module.scss';
 
 type ServerCodexInspectionDraft = {
@@ -531,6 +531,7 @@ function formatServiceHost(base: string): string {
 export function ServerCodexInspectionPage() {
   const { t, i18n } = useTranslation();
   const managementKey = useAuthStore((state) => state.managementKey);
+  const currentNodeId = useCPANodeStore((state) => state.currentNodeId);
   const featureAvailability = usePanelFeatureAvailability();
   const showNotification = useNotificationStore((state) => state.showNotification);
   const showConfirmation = useNotificationStore((state) => state.showConfirmation);
@@ -587,7 +588,8 @@ export function ServerCodexInspectionPage() {
       const runsResponse = await usageServiceApi.listCodexInspectionRuns(
         resolvedBase,
         managementKey,
-        RUNS_LIMIT
+        RUNS_LIMIT,
+        currentNodeId
       );
       setRuns(runsResponse.items);
       const nextSelectedId = runsResponse.items[0]?.id;
@@ -610,6 +612,7 @@ export function ServerCodexInspectionPage() {
     featureAvailability.serverCodexInspectionAvailable,
     loadRunDetail,
     managementKey,
+    currentNodeId,
     t,
   ]);
 
@@ -743,7 +746,8 @@ export function ServerCodexInspectionPage() {
       const response = await usageServiceApi.listCodexInspectionRuns(
         serviceBase,
         managementKey,
-        RUNS_LIMIT
+        RUNS_LIMIT,
+        currentNodeId
       );
       setRuns(response.items);
       const selectionStillValid =
@@ -770,7 +774,7 @@ export function ServerCodexInspectionPage() {
       if (!silent) setLoading(false);
       refreshInFlightRef.current = false;
     }
-  }, [detail, loadPageData, loadRunDetail, managementKey, selectedRunId, serviceBase, t]);
+  }, [currentNodeId, detail, loadPageData, loadRunDetail, managementKey, selectedRunId, serviceBase, t]);
 
   useEffect(() => {
     if (!serviceBase || (!selectedConfig.enabled && !hasRunningRun)) return;
@@ -847,13 +851,14 @@ export function ServerCodexInspectionPage() {
     setRunning(true);
     setError('');
     try {
-      const nextDetail = await usageServiceApi.runCodexInspection(serviceBase, managementKey);
+      const nextDetail = await usageServiceApi.runCodexInspection(serviceBase, managementKey, currentNodeId);
       setDetail(nextDetail);
       setSelectedRunId(nextDetail.run.id);
       const response = await usageServiceApi.listCodexInspectionRuns(
         serviceBase,
         managementKey,
-        RUNS_LIMIT
+        RUNS_LIMIT,
+        currentNodeId
       );
       setRuns(response.items);
       showNotification(t('monitoring.server_codex_inspection_run_success'), 'success');
@@ -864,7 +869,7 @@ export function ServerCodexInspectionPage() {
     } finally {
       setRunning(false);
     }
-  }, [managementKey, refreshRuns, serviceBase, showNotification, t]);
+  }, [currentNodeId, managementKey, refreshRuns, serviceBase, showNotification, t]);
 
   const handleRunNow = () => {
     showConfirmation({
@@ -906,7 +911,8 @@ export function ServerCodexInspectionPage() {
         const runsResponse = await usageServiceApi.listCodexInspectionRuns(
           serviceBase,
           managementKey,
-          RUNS_LIMIT
+          RUNS_LIMIT,
+          currentNodeId
         );
         setRuns(runsResponse.items);
 
@@ -933,7 +939,7 @@ export function ServerCodexInspectionPage() {
         setExecutingAllActions(false);
       }
     },
-    [detail, managementKey, serviceBase, showNotification, t]
+    [currentNodeId, detail, managementKey, serviceBase, showNotification, t]
   );
 
   const handleExecuteServerActions = useCallback(

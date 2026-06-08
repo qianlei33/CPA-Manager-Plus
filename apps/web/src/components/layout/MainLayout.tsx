@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { PageTransition } from '@/components/common/PageTransition';
@@ -28,6 +28,7 @@ import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
 import {
   useAuthStore,
   useConfigStore,
+  useCPANodeStore,
   useLanguageStore,
   useNotificationStore,
   useThemeStore,
@@ -168,13 +169,20 @@ export function MainLayout() {
   const { t } = useTranslation();
   const { showNotification } = useNotificationStore();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const logout = useAuthStore((state) => state.logout);
+  const apiBase = useAuthStore((state) => state.apiBase);
+  const managementKey = useAuthStore((state) => state.managementKey);
 
   const config = useConfigStore((state) => state.config);
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
   const clearCache = useConfigStore((state) => state.clearCache);
   const featureAvailability = usePanelFeatureAvailability();
+  const nodes = useCPANodeStore((state) => state.nodes);
+  const currentNodeId = useCPANodeStore((state) => state.currentNodeId);
+  const fetchNodes = useCPANodeStore((state) => state.fetchNodes);
+  const setCurrentNodeId = useCPANodeStore((state) => state.setCurrentNodeId);
 
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
@@ -191,7 +199,9 @@ export function MainLayout() {
   });
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [nodeMenuOpen, setNodeMenuOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement | null>(null);
+  const nodeMenuRef = useRef<HTMLDivElement | null>(null);
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLElement | null>(null);
@@ -263,6 +273,32 @@ export function MainLayout() {
   }, []);
 
   useEffect(() => {
+    if (!nodeMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!nodeMenuRef.current?.contains(event.target as Node)) {
+        setNodeMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setNodeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [nodeMenuOpen]);
+
+  useEffect(() => {
     if (!languageMenuOpen) {
       return;
     }
@@ -317,11 +353,19 @@ export function MainLayout() {
   const toggleLanguageMenu = useCallback(() => {
     setLanguageMenuOpen((prev) => !prev);
     setThemeMenuOpen(false);
+    setNodeMenuOpen(false);
   }, []);
 
   const toggleThemeMenu = useCallback(() => {
     setThemeMenuOpen((prev) => !prev);
     setLanguageMenuOpen(false);
+    setNodeMenuOpen(false);
+  }, []);
+
+  const toggleNodeMenu = useCallback(() => {
+    setNodeMenuOpen((prev) => !prev);
+    setLanguageMenuOpen(false);
+    setThemeMenuOpen(false);
   }, []);
 
   const handleThemeSelect = useCallback(
@@ -348,6 +392,11 @@ export function MainLayout() {
       // ignore initial failure; login flow会提示
     });
   }, [fetchConfig]);
+
+  useEffect(() => {
+    if (!apiBase) return;
+    void fetchNodes(apiBase, managementKey);
+  }, [apiBase, fetchNodes, managementKey]);
 
   const fileLogsAvailable = isFileLogsAvailable(config);
   const operationNavItems: NavItem[] = [
@@ -475,11 +524,15 @@ export function MainLayout() {
     item.path === '/' || item.exact
       ? pathname === item.path
       : pathname === item.path || pathname.startsWith(`${item.path}/`);
-  const activeNavItem =
-    [...navItems]
-      .sort((a, b) => b.path.length - a.path.length)
-      .find((item) => matchesNavPath(item, currentPath)) ?? navItems[0];
-  const currentRouteLabel = activeNavItem?.label ?? fullBrandName;
+  const activeNavItem = [...navItems]
+    .sort((a, b) => b.path.length - a.path.length)
+    .find((item) => matchesNavPath(item, currentPath));
+  const plusRouteLabels: Record<string, string> = {
+    '/cpa-nodes': 'CPA 节点管理',
+    '/plus-settings': 'Plus 设置',
+  };
+  const currentRouteLabel = activeNavItem?.label ?? plusRouteLabels[currentPath] ?? fullBrandName;
+  const currentNode = nodes.find((node) => node.id === currentNodeId);
 
   return (
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
@@ -523,6 +576,75 @@ export function MainLayout() {
           </div>
 
           <div className="navbar-right">
+            <div className={`language-menu ${nodeMenuOpen ? 'open' : ''}`} ref={nodeMenuRef}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleNodeMenu}
+                title="当前 CPA 节点"
+                aria-label="当前 CPA 节点"
+                aria-haspopup="menu"
+                aria-expanded={nodeMenuOpen}
+              >
+                {currentNode?.name || '选择节点'} ▾
+              </Button>
+              {nodeMenuOpen && (
+                <div className="notification entering language-menu-popover" role="menu" aria-label="CPA 节点">
+                  {nodes.length === 0 ? (
+                    <button
+                      type="button"
+                      className="language-menu-option"
+                      onClick={() => {
+                        setNodeMenuOpen(false);
+                        navigate('/cpa-nodes');
+                      }}
+                      role="menuitem"
+                    >
+                      <span>添加第一个 CPA 节点</span>
+                    </button>
+                  ) : (
+                    nodes.map((node) => (
+                      <button
+                        key={node.id}
+                        type="button"
+                        className={`language-menu-option ${node.id === currentNodeId ? 'active' : ''}`}
+                        onClick={() => {
+                          setCurrentNodeId(node.id);
+                          setNodeMenuOpen(false);
+                        }}
+                        role="menuitemradio"
+                        aria-checked={node.id === currentNodeId}
+                      >
+                        <span>{node.name}</span>
+                      </button>
+                    ))
+                  )}
+                  <button
+                    type="button"
+                    className="language-menu-option"
+                    onClick={() => {
+                      setNodeMenuOpen(false);
+                      navigate('/cpa-nodes');
+                    }}
+                    role="menuitem"
+                  >
+                    <span>节点管理</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="language-menu-option"
+                    onClick={() => {
+                      setNodeMenuOpen(false);
+                      navigate('/plus-settings');
+                    }}
+                    role="menuitem"
+                  >
+                    <span>Plus 设置</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             <Button
               variant="ghost"
               size="sm"

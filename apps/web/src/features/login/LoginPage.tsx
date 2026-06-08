@@ -8,13 +8,11 @@ import {
   IconCheck,
   IconEye,
   IconEyeOff,
-  IconInfo,
   IconKey,
   IconLanguages,
   IconMoon,
   IconShield,
   IconSun,
-  IconTimer,
 } from '@/components/ui/icons';
 import {
   useAuthStore,
@@ -153,15 +151,8 @@ export function LoginPage() {
     : t('login.cpa_management_key_hint');
 
   const usageSetupSteps = useMemo<UsageSetupStep[]>(
-    () => [
-      'admin',
-      'connection',
-      'cpaKey',
-      'monitoring',
-      ...(requestMonitoringEnabled ? (['polling'] as UsageSetupStep[]) : []),
-      'review',
-    ],
-    [requestMonitoringEnabled]
+    () => ['admin', 'review'],
+    []
   );
   const usageSetupStepIndex = Math.max(0, usageSetupSteps.indexOf(usageSetupStep));
   const usageSetupIsFirstStep = usageSetupStepIndex <= 0;
@@ -318,29 +309,10 @@ export function LoginPage() {
         setError(t('login.admin_key_required'));
         return false;
       }
-      if (step === 'connection' && !apiBase.trim()) {
-        setError(t('login.cpa_address_required'));
-        return false;
-      }
-      if (step === 'cpaKey' && !cpaManagementKey.trim()) {
-        setError(t('login.cpa_management_key_required'));
-        return false;
-      }
-      if (step === 'polling') {
-        const parsedPollIntervalMs = Number(pollIntervalMs);
-        if (
-          !/^\d+$/.test(pollIntervalMs.trim()) ||
-          !Number.isFinite(parsedPollIntervalMs) ||
-          parsedPollIntervalMs <= 0
-        ) {
-          setError(t('login.poll_interval_invalid'));
-          return false;
-        }
-      }
       setError('');
       return true;
     },
-    [adminKey, apiBase, cpaManagementKey, pollIntervalMs, t]
+    [adminKey, t]
   );
 
   const handleUsageSetupNext = useCallback(() => {
@@ -372,14 +344,6 @@ export function LoginPage() {
         setError(t('login.admin_key_required'));
         return;
       }
-      if (!apiBase.trim()) {
-        setError(t('login.cpa_address_required'));
-        return;
-      }
-      if (!trimmedCPAKey) {
-        setError(t('login.cpa_management_key_required'));
-        return;
-      }
     } else if (isManagerServerMode) {
       if (!trimmedAdminKey) {
         setError(t('login.admin_key_required'));
@@ -390,38 +354,15 @@ export function LoginPage() {
       return;
     }
 
-    const parsedPollIntervalMs = Number(pollIntervalMs);
-    if (
-      usageServiceNeedsSetup &&
-      requestMonitoringEnabled &&
-      (!/^\d+$/.test(pollIntervalMs.trim()) ||
-        !Number.isFinite(parsedPollIntervalMs) ||
-        parsedPollIntervalMs <= 0)
-    ) {
-      setError(t('login.poll_interval_invalid'));
-      return;
-    }
-
     setLoading(true);
     setError('');
     try {
       if (usageServiceNeedsSetup) {
-        await usageServiceApi.setup(
-          detectedBase,
-          {
-            cpaBaseUrl: baseToUse,
-            cpaManagementKey: trimmedCPAKey,
-            pollIntervalMs: requestMonitoringEnabled ? parsedPollIntervalMs : undefined,
-            ensureUsageStatisticsEnabled: requestMonitoringEnabled,
-            requestMonitoringEnabled,
-          },
-          trimmedAdminKey
-        );
+        await usageServiceApi.initializeAdminToken(detectedBase, trimmedAdminKey);
         setUsageServiceConfig(
           { enabled: true, serviceBase: detectedBase },
           { panelBase: detectedBase, panelHostMode: 'manager_embedded' }
         );
-        localStorage.setItem(USAGE_SERVICE_LAST_CPA_BASE_KEY, baseToUse);
       } else if (isManagerServerMode) {
         setUsageServiceConfig(
           { enabled: true, serviceBase: detectedBase },
@@ -441,7 +382,7 @@ export function LoginPage() {
         localStorage.setItem(CONFIG_TAB_STORAGE_KEY, 'manager');
         navigate('/config', { replace: true });
       } else {
-        navigate('/', { replace: true });
+        navigate(usageServiceNeedsSetup ? '/cpa-nodes' : '/', { replace: true });
       }
     } catch (err: unknown) {
       const message = getLocalizedErrorMessage(err, t);
@@ -453,15 +394,12 @@ export function LoginPage() {
   }, [
     adminKey,
     apiBase,
-    cpaManagementKey,
     detectedBase,
     handleUsageSetupNext,
     isManagerServerMode,
     login,
     navigate,
-    pollIntervalMs,
     rememberCredential,
-    requestMonitoringEnabled,
     setUsageServiceConfig,
     showNotification,
     t,
@@ -737,40 +675,6 @@ export function LoginPage() {
                               {rememberCredential ? t('common.enabled') : t('common.disabled')}
                             </strong>
                           </div>
-                          <div>
-                            <span className={styles.reviewIcon}>
-                              <IconInfo size={18} />
-                            </span>
-                            <span>{t('login.cpa_connection_label')}</span>
-                            <strong>{apiBase || '-'}</strong>
-                          </div>
-                          <div>
-                            <span className={styles.reviewIcon}>
-                              <IconKey size={18} />
-                            </span>
-                            <span>{t('login.cpa_management_key_label')}</span>
-                            <strong>{cpaManagementKey ? '************' : '-'}</strong>
-                          </div>
-                          <div>
-                            <span className={styles.reviewIcon}>
-                              <IconEye size={18} />
-                            </span>
-                            <span>{t('login.request_monitoring_enabled')}</span>
-                            <strong>
-                              {requestMonitoringEnabled
-                                ? t('common.enabled')
-                                : t('common.disabled')}
-                            </strong>
-                          </div>
-                          {requestMonitoringEnabled && (
-                            <div>
-                              <span className={styles.reviewIcon}>
-                                <IconTimer size={18} />
-                              </span>
-                              <span>{t('login.poll_interval_label')}</span>
-                              <strong>{pollIntervalMs}</strong>
-                            </div>
-                          )}
                         </div>
                       </div>
                     )}

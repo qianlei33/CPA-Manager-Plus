@@ -31,6 +31,8 @@ type Status struct {
 }
 
 type RuntimeConfig struct {
+	NodeID         string
+	NodeName       string
 	CPAUpstreamURL string
 	ManagementKey  string
 	CollectorMode  string
@@ -392,12 +394,14 @@ func (m *Manager) processItems(ctx context.Context, cfg RuntimeConfig, items []s
 		}
 		event, err := usage.NormalizeRaw([]byte(payload))
 		if err != nil {
-			_ = m.store.AddDeadLetter(ctx, item, err)
+			_ = m.store.AddDeadLetterWithNode(ctx, item, err, cfg.NodeID, cfg.NodeName)
 			m.setStatus(func(status *Status) {
 				status.DeadLetters++
 			})
 			continue
 		}
+		event.NodeID = cfg.NodeID
+		event.NodeNameSnapshot = cfg.NodeName
 		events = append(events, event)
 	}
 	m.enrichAccountSnapshots(ctx, cfg, events)

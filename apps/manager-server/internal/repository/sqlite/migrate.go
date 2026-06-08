@@ -71,6 +71,25 @@ func Migrate(db *sql.DB) error {
 			value text not null,
 			updated_at_ms integer not null
 		)`,
+		`create table if not exists cpa_nodes (
+			id text primary key,
+			name text not null,
+			base_url text not null,
+			management_key text not null,
+			enabled integer not null default 1,
+			description text,
+			collector_enabled integer not null default 1,
+			collector_mode text not null default 'auto',
+			queue text not null default 'usage',
+			pop_side text not null default 'right',
+			batch_size integer not null default 100,
+			poll_interval_ms integer not null default 500,
+			query_limit integer not null default 50000,
+			tls_skip_verify integer not null default 0,
+			created_at_ms integer not null,
+			updated_at_ms integer not null
+		)`,
+		`create index if not exists idx_cpa_nodes_enabled on cpa_nodes(enabled)`,
 		`create table if not exists model_prices (
 			model text primary key,
 			prompt_per_1m real not null,
@@ -91,6 +110,8 @@ func Migrate(db *sql.DB) error {
 		)`,
 		`create table if not exists codex_inspection_runs (
 			id integer primary key autoincrement,
+			node_id text,
+			node_name_snapshot text,
 			trigger_type text not null,
 			trigger_key text,
 			status text not null,
@@ -117,6 +138,8 @@ func Migrate(db *sql.DB) error {
 		`create table if not exists codex_inspection_results (
 			id integer primary key autoincrement,
 			run_id integer not null,
+			node_id text,
+			node_name_snapshot text,
 			account_key text not null,
 			file_name text not null,
 			display_account text not null,
@@ -165,7 +188,72 @@ func Migrate(db *sql.DB) error {
 	if err := ensureCodexInspectionResultColumns(db); err != nil {
 		return err
 	}
+	if err := ensureDeadLetterColumns(db); err != nil {
+		return err
+	}
+	if err := ensureCPANodeColumns(db); err != nil {
+		return err
+	}
 	return ensureModelPriceColumns(db)
+}
+
+func ensureCPANodeColumns(db *sql.DB) error {
+	columns := []struct {
+		name       string
+		definition string
+	}{
+		{name: "collector_enabled", definition: "integer not null default 1"},
+		{name: "collector_mode", definition: "text not null default 'auto'"},
+		{name: "queue", definition: "text not null default 'usage'"},
+		{name: "pop_side", definition: "text not null default 'right'"},
+		{name: "batch_size", definition: "integer not null default 100"},
+		{name: "poll_interval_ms", definition: "integer not null default 500"},
+		{name: "query_limit", definition: "integer not null default 50000"},
+		{name: "tls_skip_verify", definition: "integer not null default 0"},
+	}
+	return ensureColumns(db, "cpa_nodes", columns)
+}
+
+func ensureColumns(db *sql.DB, table string, columns []struct {
+	name       string
+	definition string
+}) error {
+	rows, err := db.Query(fmt.Sprintf(`pragma table_info(%s)`, table))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	existing := map[string]struct{}{}
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		existing[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, column := range columns {
+		if _, ok := existing[column.name]; ok {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`alter table %s add column %s %s`,
+			table,
+			column.name,
+			column.definition,
+		)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ensureCodexInspectionRunColumns(db *sql.DB) error {
@@ -197,6 +285,8 @@ func ensureCodexInspectionRunColumns(db *sql.DB) error {
 		definition string
 	}{
 		{name: "reauth_count", definition: "integer not null default 0"},
+		{name: "node_id", definition: "text"},
+		{name: "node_name_snapshot", definition: "text"},
 	}
 	for _, column := range columns {
 		if _, ok := existing[column.name]; ok {
@@ -244,6 +334,8 @@ func ensureCodexInspectionResultColumns(db *sql.DB) error {
 		{name: "action_status", definition: "text"},
 		{name: "executed_action", definition: "text"},
 		{name: "action_error", definition: "text"},
+		{name: "node_id", definition: "text"},
+		{name: "node_name_snapshot", definition: "text"},
 	}
 	for _, column := range columns {
 		if _, ok := existing[column.name]; ok {
@@ -305,6 +397,8 @@ func ensureUsageEventSnapshotColumns(db *sql.DB) error {
 		{name: "fail_status_code", definition: "integer"},
 		{name: "fail_summary", definition: "text"},
 		{name: "fail_body", definition: "text"},
+		{name: "node_id", definition: "text"},
+		{name: "node_name_snapshot", definition: "text"},
 	}
 	for _, column := range columns {
 		if _, ok := existing[column.name]; ok {
@@ -318,7 +412,57 @@ func ensureUsageEventSnapshotColumns(db *sql.DB) error {
 			return err
 		}
 	}
+	if _, err := db.Exec(`create index if not exists idx_usage_events_node_id on usage_events(node_id)`); err != nil {
+		return err
+	}
 	return nil
+}
+
+func ensureDeadLetterColumns(db *sql.DB) error {
+	rows, err := db.Query(`pragma table_info(dead_letter_events)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	existing := map[string]struct{}{}
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		existing[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	columns := []struct {
+		name       string
+		definition string
+	}{
+		{name: "node_id", definition: "text"},
+		{name: "node_name_snapshot", definition: "text"},
+	}
+	for _, column := range columns {
+		if _, ok := existing[column.name]; ok {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`alter table dead_letter_events add column %s %s`,
+			column.name,
+			column.definition,
+		)); err != nil {
+			return err
+		}
+	}
+	_, err = db.Exec(`create index if not exists idx_dead_letter_events_node_id on dead_letter_events(node_id)`)
+	return err
 }
 
 func ensureModelPriceColumns(db *sql.DB) error {

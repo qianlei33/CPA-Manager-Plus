@@ -432,6 +432,7 @@ describe('buildScopeFilteredRows', () => {
 describe('buildMonitoringEventsScopeKey', () => {
   it('keeps moving ranges stable when only the end time changes', () => {
     const first = buildMonitoringEventsScopeKey(
+      'node-a',
       'today',
       { startMs: 1_768_755_200_000, endMs: 1_768_759_000_000 },
       '',
@@ -440,6 +441,7 @@ describe('buildMonitoringEventsScopeKey', () => {
       'hour'
     );
     const second = buildMonitoringEventsScopeKey(
+      'node-a',
       'today',
       { startMs: 1_768_755_200_000, endMs: 1_768_759_005_000 },
       '',
@@ -453,6 +455,7 @@ describe('buildMonitoringEventsScopeKey', () => {
 
   it('keeps custom ranges tied to the explicit end time', () => {
     const first = buildMonitoringEventsScopeKey(
+      'node-a',
       'custom',
       { startMs: 1_768_755_200_000, endMs: 1_768_759_000_000 },
       '',
@@ -461,8 +464,32 @@ describe('buildMonitoringEventsScopeKey', () => {
       'hour'
     );
     const second = buildMonitoringEventsScopeKey(
+      'node-a',
       'custom',
       { startMs: 1_768_755_200_000, endMs: 1_768_759_005_000 },
+      '',
+      '',
+      {},
+      'hour'
+    );
+
+    expect(second).not.toBe(first);
+  });
+
+  it('separates cached event pages by CPA node', () => {
+    const first = buildMonitoringEventsScopeKey(
+      'node-a',
+      'today',
+      { startMs: 1_768_755_200_000, endMs: 1_768_759_000_000 },
+      '',
+      '',
+      {},
+      'hour'
+    );
+    const second = buildMonitoringEventsScopeKey(
+      'node-b',
+      'today',
+      { startMs: 1_768_755_200_000, endMs: 1_768_759_000_000 },
       '',
       '',
       {},

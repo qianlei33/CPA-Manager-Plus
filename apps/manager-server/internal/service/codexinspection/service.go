@@ -19,6 +19,7 @@ import (
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/model"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/cpa"
+	cpanodesvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/cpanode"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/managerconfig"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/store"
 )
@@ -43,6 +44,7 @@ var (
 type Service struct {
 	store                *store.Store
 	managerConfigService *managerconfig.Service
+	cpaNodeService       *cpanodesvc.Service
 	client               *http.Client
 
 	mu      sync.Mutex
@@ -50,6 +52,7 @@ type Service struct {
 }
 
 type RunRequest struct {
+	NodeID      string
 	TriggerType string
 	TriggerKey  string
 }
@@ -176,14 +179,23 @@ func (w codexClassifiedWindows) longWindowLabel(window *codexWindow) string {
 	}
 }
 
-func New(st *store.Store, managerConfigService *managerconfig.Service, clients ...*http.Client) *Service {
+func New(st *store.Store, managerConfigService *managerconfig.Service, optional ...any) *Service {
 	client := &http.Client{Timeout: 30 * time.Second}
-	if len(clients) > 0 && clients[0] != nil {
-		client = clients[0]
+	var cpaNodeService *cpanodesvc.Service
+	for _, item := range optional {
+		switch typed := item.(type) {
+		case *cpanodesvc.Service:
+			cpaNodeService = typed
+		case *http.Client:
+			if typed != nil {
+				client = typed
+			}
+		}
 	}
 	return &Service{
 		store:                st,
 		managerConfigService: managerConfigService,
+		cpaNodeService:       cpaNodeService,
 		client:               client,
 	}
 }
@@ -194,7 +206,7 @@ func (s *Service) Run(ctx context.Context, req RunRequest) (RunDetail, error) {
 	}
 	defer s.releaseRun()
 
-	settings, setup, err := s.resolveRuntime(ctx)
+	settings, setup, node, err := s.resolveRuntime(ctx, req.NodeID)
 	if err != nil {
 		return RunDetail{}, err
 	}
@@ -205,12 +217,14 @@ func (s *Service) Run(ctx context.Context, req RunRequest) (RunDetail, error) {
 	}
 	startedAt := time.Now().UnixMilli()
 	run, err := s.store.CreateCodexInspectionRun(ctx, model.CodexInspectionRun{
-		TriggerType:  triggerType,
-		TriggerKey:   strings.TrimSpace(req.TriggerKey),
-		Status:       model.CodexInspectionStatusRunning,
-		StartedAtMS:  startedAt,
-		Settings:     settings,
-		SettingsJSON: model.MarshalCodexInspectionSettings(settings),
+		NodeID:           node.ID,
+		NodeNameSnapshot: node.Name,
+		TriggerType:      triggerType,
+		TriggerKey:       strings.TrimSpace(req.TriggerKey),
+		Status:           model.CodexInspectionStatusRunning,
+		StartedAtMS:      startedAt,
+		Settings:         settings,
+		SettingsJSON:     model.MarshalCodexInspectionSettings(settings),
 	})
 	if err != nil {
 		return RunDetail{}, err
@@ -257,6 +271,8 @@ func (s *Service) Run(ctx context.Context, req RunRequest) (RunDetail, error) {
 	if err := ctx.Err(); err != nil {
 		for _, result := range results {
 			result.RunID = run.ID
+			result.NodeID = run.NodeID
+			result.NodeNameSnapshot = run.NodeNameSnapshot
 			_, _ = s.store.InsertCodexInspectionResult(persistCtx, result)
 		}
 		run = summarizeRun(run, results)
@@ -275,6 +291,8 @@ func (s *Service) Run(ctx context.Context, req RunRequest) (RunDetail, error) {
 	results = applyActionOutcomes(results, actionOutcomes)
 	for _, result := range results {
 		result.RunID = run.ID
+		result.NodeID = run.NodeID
+		result.NodeNameSnapshot = run.NodeNameSnapshot
 		_, _ = s.store.InsertCodexInspectionResult(persistCtx, result)
 	}
 	run = summarizeRun(run, results)
@@ -298,6 +316,13 @@ func (s *Service) Run(ctx context.Context, req RunRequest) (RunDetail, error) {
 
 func (s *Service) ListRuns(ctx context.Context, limit int) ([]model.CodexInspectionRun, error) {
 	return s.store.ListCodexInspectionRuns(ctx, limit)
+}
+
+func (s *Service) ListRunsForNode(ctx context.Context, nodeID string, limit int) ([]model.CodexInspectionRun, error) {
+	if strings.TrimSpace(nodeID) == "" {
+		return s.ListRuns(ctx, limit)
+	}
+	return s.store.ListCodexInspectionRunsForNode(ctx, strings.TrimSpace(nodeID), limit)
 }
 
 func (s *Service) GetRun(ctx context.Context, id int64) (RunDetail, error) {
@@ -329,11 +354,11 @@ func (s *Service) ExecuteManualActions(ctx context.Context, runID int64, req Exe
 		return ExecuteActionsResult{}, ErrActionIDsRequired
 	}
 
-	settings, setup, err := s.resolveRuntime(ctx)
+	detail, err := s.GetRun(ctx, runID)
 	if err != nil {
 		return ExecuteActionsResult{}, err
 	}
-	detail, err := s.GetRun(ctx, runID)
+	settings, setup, _, err := s.resolveRuntime(ctx, detail.Run.NodeID)
 	if err != nil {
 		return ExecuteActionsResult{}, err
 	}
@@ -390,6 +415,8 @@ func (s *Service) ExecuteManualActions(ctx context.Context, runID int64, req Exe
 	nextResults := applyActionOutcomes(detail.Results, outcomes)
 	for _, result := range nextResults {
 		result.RunID = detail.Run.ID
+		result.NodeID = detail.Run.NodeID
+		result.NodeNameSnapshot = detail.Run.NodeNameSnapshot
 		_, _ = s.store.InsertCodexInspectionResult(persistCtx, result)
 	}
 
@@ -445,20 +472,32 @@ func (s *Service) releaseRun() {
 	s.running = false
 }
 
-func (s *Service) resolveRuntime(ctx context.Context) (model.ManagerCodexInspectionConfig, store.Setup, error) {
+func (s *Service) resolveRuntime(ctx context.Context, nodeID string) (model.ManagerCodexInspectionConfig, store.Setup, model.CPANode, error) {
+	if s.cpaNodeService != nil && strings.TrimSpace(nodeID) != "" {
+		node, err := s.cpaNodeService.ResolveNode(ctx, nodeID)
+		if err != nil {
+			return model.ManagerCodexInspectionConfig{}, store.Setup{}, model.CPANode{}, err
+		}
+		managerCfg, _, _, err := s.managerConfigService.ResolveManagerConfigWithSource(ctx)
+		if err != nil {
+			return model.ManagerCodexInspectionConfig{}, store.Setup{}, model.CPANode{}, err
+		}
+		settings := model.NormalizeCodexInspectionConfig(managerCfg.CodexInspection, model.DefaultCodexInspectionConfig())
+		return settings, store.Setup{CPAUpstreamURL: node.BaseURL, ManagementKey: node.ManagementKey}, node, nil
+	}
 	managerCfg, _, ok, err := s.managerConfigService.ResolveManagerConfigWithSource(ctx)
 	if err != nil {
-		return model.ManagerCodexInspectionConfig{}, store.Setup{}, err
+		return model.ManagerCodexInspectionConfig{}, store.Setup{}, model.CPANode{}, err
 	}
 	if !ok || strings.TrimSpace(managerCfg.CPAConnection.CPABaseURL) == "" ||
 		strings.TrimSpace(managerCfg.CPAConnection.ManagementKey) == "" {
-		return model.ManagerCodexInspectionConfig{}, store.Setup{}, ErrNotConfigured
+		return model.ManagerCodexInspectionConfig{}, store.Setup{}, model.CPANode{}, ErrNotConfigured
 	}
 	settings := model.NormalizeCodexInspectionConfig(
 		managerCfg.CodexInspection,
 		model.DefaultCodexInspectionConfig(),
 	)
-	return settings, managerconfig.SetupFromManagerConfig(managerCfg), nil
+	return settings, managerconfig.SetupFromManagerConfig(managerCfg), model.CPANode{}, nil
 }
 
 func (s *Service) failRun(ctx context.Context, run model.CodexInspectionRun, cause error) (RunDetail, error) {

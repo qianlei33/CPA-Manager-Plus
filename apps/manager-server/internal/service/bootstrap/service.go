@@ -28,6 +28,10 @@ func Run(ctx context.Context, cfg config.Config, st *store.Store, dataKeyCreated
 	}
 	result.AdminCreated = adminCreated
 	result.GeneratedAdminKey = generatedAdminKey
+	_, adminReady, err := st.LoadAdminCredential(ctx)
+	if err != nil {
+		return Result{}, err
+	}
 
 	historical, err := st.HasHistoricalData(ctx)
 	if err != nil {
@@ -56,7 +60,7 @@ func Run(ctx context.Context, cfg config.Config, st *store.Store, dataKeyCreated
 	state := store.BootstrapState{
 		Version:            1,
 		Status:             bootstrapStatus(projectInitialized, historical),
-		AdminReady:         true,
+		AdminReady:         adminReady,
 		ProjectInitialized: projectInitialized,
 		DataKeyReady:       true,
 		MigratedLegacy:     result.MigratedLegacy,
@@ -77,12 +81,7 @@ func ensureAdminCredential(ctx context.Context, cfg config.Config, st *store.Sto
 	adminKey := cfg.AdminKey
 	source := "env"
 	if adminKey == "" {
-		generated, err := security.GenerateAdminKey()
-		if err != nil {
-			return false, "", err
-		}
-		adminKey = generated
-		source = "generated"
+		return false, "", nil
 	}
 	credential, err := security.NewAdminCredential(adminKey, source)
 	if err != nil {
